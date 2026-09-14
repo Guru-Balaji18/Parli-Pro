@@ -1,0 +1,147 @@
+// Parliamentary terminology for HOSA Parli Pro.
+// Definitions written for this app from RONR principles — not copied from any glossary.
+export const VOCAB_GROUPS = [
+  {
+    id: 'foundations',
+    label: 'Foundations',
+    terms: [
+      { term: 'Parliamentary procedure', def: 'The body of rules and customs that lets a group make decisions fairly and efficiently, protecting both the majority\u2019s right to decide and the minority\u2019s right to be heard.' },
+      { term: 'Deliberative assembly', def: 'A group that meets to discuss and decide on action together, where members act on their own judgment and each vote carries equal weight.' },
+      { term: 'Common parliamentary law', def: 'The general rules and customs a group is bound by when it has not adopted rules of its own.' },
+      { term: 'Parliamentary authority', def: 'The manual a group names in its bylaws to govern procedure \u2014 for HOSA and most competitive events, Robert\u2019s Rules of Order Newly Revised.' },
+      { term: 'RONR', def: 'Robert\u2019s Rules of Order Newly Revised, the official parliamentary authority for the HOSA event. "RONR In Brief" is its short companion volume.' },
+      { term: 'Quorum', def: 'The minimum number of members who must be present for the group to legally transact business. Without a bylaw provision, it is a majority of the entire membership.' },
+      { term: 'Session vs. meeting', def: 'A meeting is a single gathering without lasting adjournment; a session is one or more connected meetings devoted to the same order of business. For most local groups each meeting is its own session.' },
+    ],
+  },
+  {
+    id: 'rules-hierarchy',
+    label: 'The rules hierarchy',
+    terms: [
+      { term: 'Corporate charter', def: 'The legal document creating an incorporated society. It outranks every other rule the organization has.' },
+      { term: 'Bylaws', def: 'The organization\u2019s own highest body of rules (below a charter), covering its name, purpose, members, officers, meetings, and committees. Hard to suspend and hard to amend.' },
+      { term: 'Rules of order', def: 'Written rules of parliamentary procedure the group follows \u2014 normally supplied by adopting a parliamentary authority.' },
+      { term: 'Special rules of order', def: 'Rules that modify or supplement the adopted parliamentary authority. Adopted separately from the bylaws; they override the authority where they conflict.' },
+      { term: 'Standing rules', def: 'Rules about administrative detail rather than procedure (meeting start time, guest register). Adopted by majority vote, no notice needed, and suspendable for a session.' },
+    ],
+  },
+  {
+    id: 'meeting-flow',
+    label: 'Running a meeting',
+    terms: [
+      { term: 'Order of business', def: 'The fixed sequence a meeting follows: call to order, minutes, officer reports, committee reports, special orders, unfinished business, new business, adjournment.' },
+      { term: 'Agenda', def: 'The specific list of items to be handled at a particular meeting, built on top of the standard order of business.' },
+      { term: 'Minutes', def: 'The official written record of what was *done* at a meeting \u2014 motions, movers, and results \u2014 not what was said in debate.' },
+      { term: 'Unfinished business', def: 'Business carried over because the previous meeting adjourned before disposing of it. The correct term \u2014 not "old business."' },
+      { term: 'New business', def: 'Matters brought before the group for the first time. In the HOSA event, the secret topic is handled here.' },
+      { term: 'Obtaining the floor', def: 'Rising, addressing the chair, and being recognized before speaking or making a motion.' },
+      { term: 'The chair', def: 'Both the presiding officer and the position itself. The presiding officer refers to themself in the third person ("the chair rules...") during formal proceedings.' },
+      { term: 'Pending question', def: 'A motion that has been stated by the chair and not yet disposed of. The *immediately* pending question is the most recently stated one.' },
+      { term: 'Putting the question', def: 'The chair taking the actual vote on a pending motion.' },
+      { term: 'Unanimous (general) consent', def: 'Adopting something without a formal vote by asking if there is objection. Used for routine matters like approving minutes.' },
+      { term: 'Executive session', def: 'A portion of a meeting closed to non-members, with proceedings kept confidential.' },
+    ],
+  },
+  {
+    id: 'motion-basics',
+    label: 'Motion basics',
+    terms: [
+      { term: 'Motion', def: 'A formal proposal that the group take some action, introduced with "I move that\u2026"' },
+      { term: 'Second', def: 'Another member indicating the motion should come before the group. No recognition needed and it implies no support for the idea itself.' },
+      { term: 'Main motion', def: 'The motion that brings new business before the assembly. Lowest precedence \u2014 nothing else may be pending when it is made.' },
+      { term: 'Secondary motion', def: 'Any motion made while a main motion is pending \u2014 subsidiary, privileged, or incidental.' },
+      { term: 'Precedence', def: 'The ranking that decides which motions may be made while another is pending. A higher-ranking motion can interrupt a lower one, never the reverse.' },
+      { term: 'Germane', def: 'Directly related to the motion at hand. Amendments must be germane, and debate must stay germane.' },
+      { term: 'Resolution', def: 'A main motion written out formally, often with "Whereas" clauses giving background and "Resolved" clauses stating the action.' },
+      { term: 'Table of Rules', def: 'The reference chart showing, for each motion, whether it needs a second, is debatable, is amendable, and what vote it requires.' },
+    ],
+  },
+  {
+    id: 'subsidiary',
+    label: 'Subsidiary motions',
+    terms: [
+      { term: 'Postpone Indefinitely', def: 'Kills the main motion for the session without a direct vote on its merits. Debatable (reopens the main motion\u2019s merits), not amendable, majority.' },
+      { term: 'Amend', def: 'Changes the wording of a pending motion by inserting, striking, striking-and-inserting, or substituting. Amendable once more; majority even if the underlying motion needs two-thirds.' },
+      { term: 'Commit or Refer', def: 'Sends the question to a committee for closer study. Debatable, amendable, majority.' },
+      { term: 'Postpone to a Certain Time', def: 'Also called Postpone Definitely. Delays the question to a stated later time. Debatable (limited), amendable, majority.' },
+      { term: 'Limit or Extend Limits of Debate', def: 'Changes how long or how often members may speak. Not debatable, amendable as to time, two-thirds.' },
+      { term: 'Previous Question', def: 'Closes debate and forces an immediate vote. Not debatable, not amendable, two-thirds. Calling out "Question!" from a seat does not accomplish this.' },
+      { term: 'Lay on the Table', def: 'Sets a question aside temporarily for genuinely urgent business. Not debatable, not amendable, majority. Not a legitimate way to kill a motion.' },
+    ],
+  },
+  {
+    id: 'privileged',
+    label: 'Privileged motions',
+    terms: [
+      { term: 'Fix the Time to Which to Adjourn', def: 'Sets when the group will next meet. Highest-ranking privileged motion. Amendable as to time, majority, not debatable when something is pending.' },
+      { term: 'Adjourn', def: 'Closes the meeting. Not debatable, not amendable, majority. While business is pending it is in order only if a next meeting time is already set.' },
+      { term: 'Recess', def: 'A short break within the meeting. Not debatable, amendable as to length, majority.' },
+      { term: 'Raise a Question of Privilege', def: 'An urgent request about the comfort or rights of the assembly or a member \u2014 noise, temperature, visibility. The chair rules on it directly.' },
+      { term: 'Call for the Orders of the Day', def: 'Demands the group return to its adopted agenda. Lowest-ranking privileged motion; a single member can require it, but a two-thirds vote can set it aside.' },
+    ],
+  },
+  {
+    id: 'incidental',
+    label: 'Incidental motions',
+    terms: [
+      { term: 'Point of Order', def: 'Calls attention to a breach of the rules at the moment it happens. No second, not debatable; the chair rules.' },
+      { term: 'Appeal', def: 'Challenges the chair\u2019s ruling; must be raised immediately. Usually debatable, majority, and a tie sustains the chair.' },
+      { term: 'Suspend the Rules', def: 'Temporarily sets aside a procedural or standing rule. Not debatable, not amendable, two-thirds. Bylaws generally cannot be suspended.' },
+      { term: 'Objection to the Consideration of a Question', def: 'Prevents a main motion from being taken up at all. Must be raised before debate begins. No second, not debatable, two-thirds against consideration.' },
+      { term: 'Division of the Assembly', def: 'Demands a standing vote when a voice vote seemed doubtful. The right of a single member \u2014 no second, no vote, just call "Division!"' },
+      { term: 'Division of a Question', def: 'Splits a multi-part motion into separate questions, each able to stand alone. Does not apply to amendments.' },
+      { term: 'Parliamentary Inquiry', def: 'Asks the chair a question about procedure. No second, not debatable, no vote.' },
+      { term: 'Request for Information', def: 'Also called Point of Information. Asks for facts about the pending business, directed to the chair or through the chair to another member. Not a chance to make an argument.' },
+      { term: 'Withdraw a Motion', def: 'The maker pulls back their own motion. Free to do before the chair states it; afterward it needs the assembly\u2019s consent.' },
+    ],
+  },
+  {
+    id: 'bring-back',
+    label: 'Bringing a question back',
+    terms: [
+      { term: 'Reconsider', def: 'Revisits a vote taken earlier in the same session. Must be moved by someone who voted on the prevailing side; debatable if the original motion was.' },
+      { term: 'Rescind', def: 'Repeals a previously adopted motion. Majority with previous notice, or two-thirds without it.' },
+      { term: 'Amend Something Previously Adopted', def: 'Changes part of a motion already adopted, under the same vote requirements as Rescind.' },
+      { term: 'Take from the Table', def: 'Brings back a motion that was laid on the table. Not debatable, not amendable, majority.' },
+      { term: 'Discharge a Committee', def: 'Takes a referred matter back out of a committee\u2019s hands before it reports.' },
+      { term: 'Previous notice', def: 'Announcing at a prior meeting (or in the call of the meeting) that a motion will be made, which lowers the vote threshold for certain motions.' },
+    ],
+  },
+  {
+    id: 'voting',
+    label: 'Voting and elections',
+    terms: [
+      { term: 'Majority vote', def: 'More than half of the votes cast by members present and voting. Abstentions are not counted.' },
+      { term: 'Two-thirds vote', def: 'At least two-thirds of votes cast. Required when a motion limits or removes members\u2019 rights \u2014 closing debate, limiting debate, suspending rules, objecting to consideration.' },
+      { term: 'Plurality', def: 'The largest number of votes among several options, even if less than half. Does not elect unless the bylaws say so.' },
+      { term: 'Viva voce', def: 'A voice vote \u2014 the normal first method of voting on a main motion.' },
+      { term: 'Rising vote', def: 'Members stand to be counted. Used for two-thirds votes and to verify a doubtful voice vote.' },
+      { term: 'Ballot vote', def: 'A secret written vote, used when the bylaws require it or the group orders it.' },
+      { term: 'Roll call vote', def: 'Each member\u2019s vote is recorded by name \u2014 used when members are accountable to a constituency.' },
+      { term: 'Abstention', def: 'Declining to vote. Not counted as a vote either way, so it never affects whether a majority is reached.' },
+      { term: 'Tie vote', def: 'A motion fails on a tie, because it did not achieve more than half. The chair may vote to break or create a tie.' },
+      { term: 'Prevailing side', def: 'The side that won the vote. Only a member who voted on it may move to Reconsider.' },
+      { term: 'Nomination', def: 'Formally proposing a candidate for office. Nominations need no second, and a member may nominate themself.' },
+      { term: 'Teller', def: 'A member appointed to collect and count ballots and report the results.' },
+    ],
+  },
+  {
+    id: 'officers',
+    label: 'Officers and committees',
+    terms: [
+      { term: 'Presiding officer', def: 'The person running the meeting \u2014 addressed as "Mr./Madam President," or Chairman/Chairwoman if the group has no president. A VP who presides is still addressed as President.' },
+      { term: 'Secretary', def: 'Keeps the minutes and the official records. With the presiding officer, one of the two officers essential to conducting business.' },
+      { term: 'Treasurer', def: 'Handles the group\u2019s funds and gives the treasurer\u2019s report, which is received for filing rather than adopted.' },
+      { term: 'Parliamentarian', def: 'An advisor to the chair on procedure. Advises only \u2014 never rules, and normally does not vote.' },
+      { term: 'Standing committee', def: 'A permanent committee named in the bylaws that handles a continuing area of work.' },
+      { term: 'Special (ad hoc) committee', def: 'A committee formed for one specific task, which dissolves once it reports.' },
+      { term: 'Committee of the Whole', def: 'The entire assembly resolving itself into a committee so it can discuss a matter under looser debate rules.' },
+      { term: 'Ex officio', def: 'Membership held automatically because of an office held \u2014 such as a president who sits on every committee.' },
+      { term: 'Board', def: 'A smaller administrative body acting for the organization between meetings, subordinate to the full assembly.' },
+    ],
+  },
+]
+
+export const VOCAB_TERMS = VOCAB_GROUPS.flatMap((g) =>
+  g.terms.map((t, i) => ({ ...t, groupId: g.id, groupLabel: g.label, id: `${g.id}-${i}` }))
+)
