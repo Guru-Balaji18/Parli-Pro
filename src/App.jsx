@@ -1,14 +1,15 @@
 import { useState } from 'react'
 import './App.css'
-import Login from './components/Login'
+import TeamAuth from './components/TeamAuth'
 import Dashboard from './components/Dashboard'
 import Practice from './components/Practice'
 import Vocab from './components/Vocab'
 import Reference from './components/Reference'
+import Team from './components/Team'
 import Settings from './components/Settings'
 import { useRecord } from './lib/useRecord'
 
-const UNLOCK_KEY = 'ppa_unlocked'
+const PROFILE_KEY = 'ppa_profile'
 
 const NAV = [
   { id: 'dashboard', num: 'I.', label: 'Dashboard' },
@@ -16,27 +17,35 @@ const NAV = [
   { id: 'exam', num: 'III.', label: 'Mock Test' },
   { id: 'review', num: 'IV.', label: 'Missed' },
   { id: 'flagged', num: 'V.', label: 'Flagged' },
-  { id: 'vocab', num: 'VI.', label: 'Vocabulary' },
-  { id: 'reference', num: 'VII.', label: 'Reference' },
-  { id: 'settings', num: 'VIII.', label: 'Settings' },
+  { id: 'team', num: 'VI.', label: 'Team' },
+  { id: 'vocab', num: 'VII.', label: 'Vocabulary' },
+  { id: 'reference', num: 'VIII.', label: 'Reference' },
+  { id: 'settings', num: 'IX.', label: 'Settings' },
 ]
 
 function App() {
-  const [unlocked, setUnlocked] = useState(
-    () => localStorage.getItem(UNLOCK_KEY) === 'true'
-  )
+  const [profile, setProfile] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(PROFILE_KEY) || 'null')
+    } catch {
+      return null
+    }
+  })
   const [view, setView] = useState('dashboard')
-  const record = useRecord()
+  const record = useRecord(profile)
 
-  if (!unlocked) {
-    return (
-      <Login
-        onUnlock={() => {
-          localStorage.setItem(UNLOCK_KEY, 'true')
-          setUnlocked(true)
-        }}
-      />
-    )
+  function handleAuth(p) {
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(p))
+    setProfile(p)
+  }
+
+  function handleLogout() {
+    localStorage.removeItem(PROFILE_KEY)
+    setProfile(null)
+  }
+
+  if (!profile) {
+    return <TeamAuth onAuth={handleAuth} />
   }
 
   const drillModes = ['practice', 'exam', 'review', 'flagged']
@@ -47,6 +56,9 @@ function App() {
         <div className="rail-brand">
           <div className="kicker">HOSA · Parliamentary Procedure</div>
           <h1>Order of Business</h1>
+          <div className="rail-user">
+            {profile.display_name}{profile.role === 'captain' ? ' · captain' : ''}
+          </div>
         </div>
         <ul className="agenda">
           {NAV.map((n) => (
@@ -61,24 +73,18 @@ function App() {
           ))}
         </ul>
         <div className="rail-foot">
-          <button
-            onClick={() => {
-              localStorage.removeItem(UNLOCK_KEY)
-              setUnlocked(false)
-            }}
-          >
-            Lock
-          </button>
+          <button onClick={handleLogout}>Log out</button>
         </div>
       </nav>
       <main className="stage">
         {view === 'dashboard' && <Dashboard record={record} goTo={setView} />}
         {drillModes.includes(view) && (
-          <Practice key={view} mode={view} record={record} />
+          <Practice key={view} mode={view} record={record} profile={profile} />
         )}
+        {view === 'team' && <Team profile={profile} />}
         {view === 'vocab' && <Vocab />}
         {view === 'reference' && <Reference />}
-        {view === 'settings' && <Settings record={record} />}
+        {view === 'settings' && <Settings profile={profile} record={record} onLogout={handleLogout} />}
       </main>
     </div>
   )

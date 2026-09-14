@@ -1,19 +1,21 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './supabase'
 
-export function useRecord() {
+export function useRecord(profile) {
   const [attempts, setAttempts] = useState(null)
   const [flags, setFlags] = useState(null)
   const [error, setError] = useState('')
 
   const reload = useCallback(async () => {
+    if (!profile) return
     const [a, f] = await Promise.all([
       supabase
         .from('attempts')
         .select('question_id, category_id, is_correct, time_seconds, answered_at, mode')
+        .eq('user_id', profile.id)
         .order('answered_at', { ascending: false })
         .limit(20000),
-      supabase.from('flags').select('question_id'),
+      supabase.from('flags').select('question_id').eq('user_id', profile.id),
     ])
     if (a.error || f.error) {
       setError('Could not load your record.')
@@ -21,7 +23,7 @@ export function useRecord() {
     }
     setAttempts(a.data)
     setFlags(new Set(f.data.map((r) => r.question_id)))
-  }, [])
+  }, [profile])
 
   useEffect(() => {
     reload()

@@ -23,7 +23,7 @@ function fmtClock(s) {
   return `${s < 0 ? '-' : ''}${m}:${String(sec).padStart(2, '0')}`
 }
 
-export default function Practice({ mode, record }) {
+export default function Practice({ mode, record, profile }) {
   const { attempts, flags, reload } = record
   const isExam = mode === 'exam'
   const isReview = mode === 'review'
@@ -111,9 +111,10 @@ export default function Practice({ mode, record }) {
         is_correct: correct,
         time_seconds: Math.round(seconds * 10) / 10,
         mode,
+        user_id: profile.id,
       })
       .then(({ error }) => error && console.error(error))
-  }, [mode])
+  }, [mode, profile.id])
 
   function pick(letter) {
     if (!current) return
@@ -162,8 +163,8 @@ export default function Practice({ mode, record }) {
   async function toggleFlag() {
     if (!current) return
     const on = flags?.has(current.id)
-    if (on) await supabase.from('flags').delete().eq('question_id', current.id)
-    else await supabase.from('flags').insert({ question_id: current.id })
+    if (on) await supabase.from('flags').delete().eq('question_id', current.id).eq('user_id', profile.id)
+    else await supabase.from('flags').insert({ question_id: current.id, user_id: profile.id })
     reload()
   }
 
@@ -197,6 +198,7 @@ export default function Practice({ mode, record }) {
         correct_count: correct,
         duration_seconds: Math.round(duration),
         finished_at: new Date().toISOString(),
+        user_id: profile.id,
       })
       .then(() => reload())
   }

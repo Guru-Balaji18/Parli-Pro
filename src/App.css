@@ -1137,3 +1137,45 @@
 .calib-list strong {
   color: var(--navy-deep);
 }
+
+.rail-user {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--brass-bright);
+  font-family: var(--font-mono);
+}
+
+.login-footnote {
+  margin-top: 18px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(28,26,23,0.45);
+}
+
+.ghost-btn.small {
+  padding: 5px 12px;
+  font-size: 13px;
+}
+
+.team-table tr.is-me {
+  background: rgba(169,120,47,0.07);
+}
+
+.drill-down {
+  margin-top: 24px;
+  background: #fff;
+  border: 1px solid var(--rule-line);
+  border-left: 3px solid var(--brass);
+  padding: 20px 24px;
+}
+
+.drill-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.drill-head h3 {
+  font-size: 17px;
+}
