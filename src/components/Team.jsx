@@ -14,8 +14,10 @@ export default function Team({ profile }) {
   const [detail, setDetail] = useState(null)
   const [now, setNow] = useState(() => new Date())
 
-  const weekStart = useMemo(() => currentWeekStart(now), [now])
-  const weekEnd = useMemo(() => nextWeekStart(now), [now])
+  // Keyed on the timestamp so the board refetches when the week rolls over, not on every clock tick.
+  const weekStartMs = currentWeekStart(now).getTime()
+  const weekStart = useMemo(() => new Date(weekStartMs), [weekStartMs])
+  const weekEnd = useMemo(() => nextWeekStart(new Date(weekStartMs)), [weekStartMs])
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 60000)
@@ -183,8 +185,8 @@ function Shell({ children, captain }) {
         <h2>Team</h2>
         <p>
           {captain
-            ? "This week's leaderboard resets every Friday for the challenge. Everyone sees name and accuracy; as captain, click a teammate for their category breakdown."
-            : "This week's leaderboard resets every Friday for the challenge. Everyone sees name and overall accuracy — your own category breakdown stays on your Dashboard."}
+            ? "This week's leaderboard resets every Friday at 12:00 AM Eastern. Everyone sees name and accuracy; as captain, click a teammate for their category breakdown."
+            : "This week's leaderboard resets every Friday at 12:00 AM Eastern. Everyone sees name and overall accuracy — your own category breakdown stays on your Dashboard."}
         </p>
       </div>
       {children}
