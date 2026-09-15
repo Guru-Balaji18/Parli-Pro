@@ -107,7 +107,11 @@ Explicitly avoided: Quizlet sets, Docsity/Stuvia study guides, and similar crowd
 
 ## 5. Copyright — why deployment protection matters
 
-Dunbar's Manual carries an explicit all-rights-reserved notice covering electronic reproduction. Studying from it is fine; putting 1,610 of its questions on an open public URL is closer to republishing it. Recommended mitigation (told to the user, not verified as actually turned on): enable Vercel's Deployment Protection → Vercel Authentication → All Deployments in the project's Vercel dashboard settings. This puts the entire site behind Vercel's own login, on top of the app's own name+PIN gate. Doesn't cost anything functionally since this was never meant to be a public product. Worth confirming this is actually turned on — it was recommended and the user said to proceed, but never explicitly confirmed back that they flipped the toggle.
+Dunbar's Manual carries an explicit all-rights-reserved notice covering electronic reproduction. Studying from it is fine; putting 1,610 of its questions on an open public URL is closer to republishing it.
+
+**Decision (2026-09-15): Vercel Deployment Protection is deliberately left OFF.** The mitigation on the table was Deployment Protection → Vercel Authentication → All Deployments, which would put the whole site behind Vercel's own login on top of the app's name+PIN gate. The owner weighed that against the friction it creates (every teammate would need a Vercel account to reach the site) and chose to keep the site reachable with only the name+PIN gate, accepting the copyright exposure. Don't re-raise this as an open item.
+
+Still applies regardless: keep the **GitHub repo private**, and don't add more copyrighted question material from unauthorized re-uploads (Quizlet, Docsity, Stuvia).
 
 ## 6. Design system — "Open Ledger" concept
 
@@ -143,8 +147,8 @@ On the Mobbin request: the user asked to use the Mobbin connector for design ins
 
 ## 8. Open items / suggested next steps
 
-1. Get actual eyes on the rendered site before making further visual changes.
-2. Confirm Vercel Deployment Protection is actually enabled (§5).
+1. ~~Get actual eyes on the rendered site before making further visual changes.~~ Done 2026-09-15 — run `npm run dev` and look at it; a `.claude/launch.json` is checked in so the preview server starts by name. Always verify visually before claiming a visual change works.
+2. ~~Confirm Vercel Deployment Protection is enabled.~~ Settled 2026-09-15 — deliberately left off (§5).
 3. If more real questions are wanted: manually download a few Georgia FFA past exams with answer keys (§4) and hand them over for parsing/merging.
 4. No code-splitting has been done — the JS bundle is ~1.6MB (~380KB gzipped), mostly the question bank JSON + recharts. Not urgent for a small team tool, but worth knowing if it ever matters.
 5. `Practice.jsx` and `App.css` have both grown large through iterative edits (400+ and 1300+ lines respectively) — could benefit from a cleanup pass if picked up for heavier feature work, but nothing broken currently.
