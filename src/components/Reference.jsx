@@ -1,8 +1,24 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { MOTION_CLASSES, PRECEDENCE_FOOTNOTE, STUDY_TIERS } from '../data/motions'
+import { slugify } from '../lib/lookup'
 
-export default function Reference() {
+export default function Reference({ jumpTo }) {
   const [tab, setTab] = useState('chart')
+
+  useEffect(() => {
+    if (!jumpTo) return
+    setTab('chart')
+    const t = setTimeout(() => {
+      const el = document.getElementById(jumpTo)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        el.classList.add('flash-highlight')
+        setTimeout(() => el.classList.remove('flash-highlight'), 2200)
+      }
+    }, 60)
+    return () => clearTimeout(t)
+  }, [jumpTo])
+
   return (
     <div>
       <div className="page-head">
@@ -41,7 +57,7 @@ export default function Reference() {
                 </thead>
                 <tbody>
                   {cls.motions.map((m) => (
-                    <tr key={m.name}>
+                    <tr key={m.name} id={slugify(m.name)}>
                       <td>
                         {m.rank && <span className="rank mono">{m.rank}</span>}
                         {m.name}

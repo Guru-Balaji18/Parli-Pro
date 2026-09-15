@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
+import BrandMark from './BrandMark'
 
 export default function TeamAuth({ onAuth }) {
   const [tab, setTab] = useState('login')
@@ -35,7 +36,8 @@ export default function TeamAuth({ onAuth }) {
   return (
     <div className="login-wrap">
       <div className="login-card">
-        <div className="login-kicker">Parliamentary Procedure · Team</div>
+        <BrandMark className="brand-mark login-mark" />
+        <div className="login-kicker">Team Sign In</div>
         <h1>Order in the Chamber</h1>
         <p>
           {tab === 'login'

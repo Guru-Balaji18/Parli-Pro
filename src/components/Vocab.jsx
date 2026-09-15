@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { VOCAB_GROUPS, VOCAB_TERMS } from '../data/vocab'
 
 function shuffle(a) {
@@ -10,10 +10,26 @@ function shuffle(a) {
   return x
 }
 
-export default function Vocab() {
+export default function Vocab({ jumpTo }) {
   const [tab, setTab] = useState('browse')
   const [query, setQuery] = useState('')
   const [group, setGroup] = useState('all')
+
+  useEffect(() => {
+    if (!jumpTo) return
+    setTab('browse')
+    setQuery('')
+    setGroup('all')
+    const t = setTimeout(() => {
+      const el = document.getElementById(jumpTo)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        el.classList.add('flash-highlight')
+        setTimeout(() => el.classList.remove('flash-highlight'), 2200)
+      }
+    }, 60)
+    return () => clearTimeout(t)
+  }, [jumpTo])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -64,7 +80,7 @@ export default function Vocab() {
           {filtered.length === 0 && <div className="empty-state">No terms match that search.</div>}
           <dl className="vocab-list">
             {filtered.map((t) => (
-              <div key={t.id} className="vocab-item">
+              <div key={t.id} id={`vocab-${t.id}`} className="vocab-item">
                 <dt>{t.term}</dt>
                 <dd>{t.def}</dd>
                 <div className="vocab-group">{t.groupLabel}</div>

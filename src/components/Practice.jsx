@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { missedQuestionIds } from '../lib/useRecord'
 import { CATEGORIES } from '../data/categories'
+import { findLookup } from '../lib/lookup'
 import questions from '../data/questions.json'
 
 function shuffle(arr) {
@@ -23,7 +24,7 @@ function fmtClock(s) {
   return `${s < 0 ? '-' : ''}${m}:${String(sec).padStart(2, '0')}`
 }
 
-export default function Practice({ mode, record, profile }) {
+export default function Practice({ mode, record, profile, onLookup }) {
   const { attempts, flags, reload } = record
   const isExam = mode === 'exam'
   const isReview = mode === 'review'
@@ -308,8 +309,9 @@ export default function Practice({ mode, record, profile }) {
                 )}
                 <div className="er-src">
                   {q.category}
-                  {q.ronr_pages ? ` · RONR p. ${q.ronr_pages}` : ''}
+                  {q.ronr_pages ? ` · cited to RONR p. ${q.ronr_pages}` : ''}
                 </div>
+                <LookupLink question={q} onLookup={onLookup} />
               </li>
             )
           })}
@@ -424,8 +426,9 @@ export default function Practice({ mode, record, profile }) {
               </div>
               <div className="q-source">
                 {current.source}
-                {current.ronr_pages ? ` · RONR p. ${current.ronr_pages}` : ''}
+                {current.ronr_pages ? ` · cited to RONR p. ${current.ronr_pages}` : ''}
               </div>
+              <LookupLink question={current} onLookup={onLookup} />
               <button className="next-btn" onClick={next} autoFocus>Next question →</button>
             </div>
           )}
@@ -438,6 +441,17 @@ export default function Practice({ mode, record, profile }) {
         </div>
       )}
     </div>
+  )
+}
+
+function LookupLink({ question, onLookup }) {
+  const hit = useMemo(() => findLookup(question.question, question.options), [question])
+  if (!hit || !onLookup) return null
+  return (
+    <button className="lookup-link" onClick={() => onLookup(hit.type, hit.anchor)}>
+      Read more on {hit.label}
+      <span className="lookup-dest">{hit.type === 'reference' ? 'Reference' : 'Vocabulary'} →</span>
+    </button>
   )
 }
 

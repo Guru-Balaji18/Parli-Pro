@@ -8,6 +8,7 @@ import Reference from './components/Reference'
 import Team from './components/Team'
 import Settings from './components/Settings'
 import { useRecord } from './lib/useRecord'
+import BrandMark from './components/BrandMark'
 
 const PROFILE_KEY = 'ppa_profile'
 
@@ -32,6 +33,7 @@ function App() {
     }
   })
   const [view, setView] = useState('dashboard')
+  const [jumpAnchor, setJumpAnchor] = useState(null)
   const record = useRecord(profile)
 
   function handleAuth(p) {
@@ -44,6 +46,11 @@ function App() {
     setProfile(null)
   }
 
+  function handleLookup(type, anchor) {
+    setView(type === 'reference' ? 'reference' : 'vocab')
+    setJumpAnchor(anchor)
+  }
+
   if (!profile) {
     return <TeamAuth onAuth={handleAuth} />
   }
@@ -54,10 +61,12 @@ function App() {
     <div className="shell">
       <nav className="rail">
         <div className="rail-brand">
-          <div className="kicker">HOSA · Parliamentary Procedure</div>
+          <BrandMark className="brand-mark" />
+          <div className="kicker">HOSA Parliamentary Procedure</div>
           <h1>Order of Business</h1>
           <div className="rail-user">
-            {profile.display_name}{profile.role === 'captain' ? ' · captain' : ''}
+            {profile.display_name}
+            {profile.role === 'captain' && <span className="captain-badge">captain</span>}
           </div>
         </div>
         <ul className="agenda">
@@ -77,14 +86,16 @@ function App() {
         </div>
       </nav>
       <main className="stage">
-        {view === 'dashboard' && <Dashboard record={record} goTo={setView} />}
-        {drillModes.includes(view) && (
-          <Practice key={view} mode={view} record={record} profile={profile} />
-        )}
-        {view === 'team' && <Team profile={profile} />}
-        {view === 'vocab' && <Vocab />}
-        {view === 'reference' && <Reference />}
-        {view === 'settings' && <Settings profile={profile} record={record} onLogout={handleLogout} />}
+        <div className="page-panel">
+          {view === 'dashboard' && <Dashboard record={record} goTo={setView} />}
+          {drillModes.includes(view) && (
+            <Practice key={view} mode={view} record={record} profile={profile} onLookup={handleLookup} />
+          )}
+          {view === 'team' && <Team profile={profile} />}
+          {view === 'vocab' && <Vocab jumpTo={view === 'vocab' ? jumpAnchor : null} />}
+          {view === 'reference' && <Reference jumpTo={view === 'reference' ? jumpAnchor : null} />}
+          {view === 'settings' && <Settings profile={profile} record={record} onLogout={handleLogout} />}
+        </div>
       </main>
     </div>
   )

@@ -1,19 +1,27 @@
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;0,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 :root {
-  --ink: #1c1a17;
-  --parchment: #f4efe4;
-  --parchment-dim: #ece5d4;
+  /* "Cover" — the dark canvas the whole app sits on, like a bound manual's cover on a table */
+  --cover: #10161d;
+  --cover-edge: #1a2330;
+  --cover-line: rgba(244, 238, 220, 0.09);
+
+  /* "Page" — the lit paper panel content actually sits on */
+  --page: #efe6cd;
+  --page-dim: #e6dab9;
+  --ink: #221d15;
+
   --navy: #1c2b3a;
   --navy-deep: #131f2b;
   --brass: #a9782f;
-  --brass-bright: #c99544;
+  --brass-bright: #d9a544;
   --forest: #3a5a40;
   --oxblood: #7a3030;
-  --rule-line: rgba(28, 26, 23, 0.14);
-  --rule-line-strong: rgba(28, 26, 23, 0.28);
 
-  --font-display: 'Fraunces', Georgia, serif;
+  --rule-line: rgba(34, 29, 21, 0.14);
+  --rule-line-strong: rgba(34, 29, 21, 0.28);
+
+  --font-display: 'EB Garamond', Georgia, serif;
   --font-body: 'IBM Plex Sans', -apple-system, sans-serif;
   --font-mono: 'IBM Plex Mono', 'SF Mono', monospace;
 
@@ -30,7 +38,7 @@ html, body, #root {
 
 body {
   margin: 0;
-  background: var(--parchment);
+  background: var(--cover);
   color: var(--ink);
   font-family: var(--font-body);
   font-size: 16px;
@@ -60,6 +68,15 @@ a {
 
 .mono {
   font-family: var(--font-mono);
+}
+
+/* Ledger-index label: italic serif instead of the generic mono-caps tag
+   treatment, used for short textual labels (categories, table headers). */
+.label-index {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: 0.01em;
 }
 
 @media (prefers-reduced-motion: reduce) {
