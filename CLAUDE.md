@@ -77,14 +77,14 @@ parlipro-app/
 │       ├── supabase.js      — client init
 │       ├── useRecord.js     — hook: loads current user's attempts+flags, plus stat helpers
 │       ├── lookup.js        — matches a question's text to a Reference motion or Vocab term (for the "Read more" cross-link)
-│       └── challengeWeek.js — Eastern-Time-aware Friday-to-Friday week boundary math (DST-safe, tested against real edge cases)
+│       └── challengeWeek.js — Friday 00:00 America/New_York week boundaries, identical on every device regardless of its time zone; DST-safe (weeks spanning a change are 167h/169h)
 ```
 
 `Practice.jsx` is intentionally one large component handling four modes (`practice`/`exam`/`review`/`flagged`) via a `mode` prop rather than four separate components — they share almost all state logic (timer, answer reveal, flagging, keyboard shortcuts) and only differ in question-pool source and end-of-session behavior.
 
 ## 4. The question bank — provenance & known limitations
 
-Parsed and deduplicated from two files in the original Claude Project (`PARLI_PRO_Practice_tests.pdf` and `parliprowrittentests.pdf` — both are actually plain text, not real PDFs, despite the extension). Source: Dunbar's Manual of Parliamentary Procedure Test Questions. Started at ~3,950 raw parsed questions across both files; 2,342 were exact duplicates (the 102 pre-built practice tests are drawn directly from the 1,600-question source manual) → 1,610 unique questions survived, each tagged to one of 12 categories via a keyword-priority classifier (see `categories.js`).
+Parsed and deduplicated from two Dunbar test-question files, `PARLI PRO Practice tests.pdf` and `parliprowrittentests.pdf` (local copies in `C:\Users\namad\Downloads\Telegram Desktop\`). They are real compressed PDFs; an earlier note calling them plain text was wrong. `parliprowrittentests.pdf` follows each question with its answer letter and an RONR page reference in older-edition pagination, which is where `ronr_pages` comes from. Neither file contains answer rationales, so explanations are written from the RONR 12th edition PDF in the same folder (`Downloads\Parli pro book.pdf` is an identical copy). Source: Dunbar's Manual of Parliamentary Procedure Test Questions. Started at ~3,950 raw parsed questions across both files; 2,342 were exact duplicates (the 102 pre-built practice tests are drawn directly from the 1,600-question source manual) → 1,610 unique questions survived, each tagged to one of 12 categories via a keyword-priority classifier (see `categories.js`).
 
 ### Cross-checked against the only official HOSA material that exists
 
@@ -136,11 +136,14 @@ On the Mobbin request: the user asked to use the Mobbin connector for design ins
 * Team accounts: name + PIN signup/login (see security model above)
 * Practice mode: category filter (12 categories), endless shuffle, stopwatch (counts up, no limit — user explicitly chose this over a countdown), instant feedback, "Read more on [motion]" cross-link to Reference/Vocab
 * Mock Test mode: 50 questions / 60-minute countdown (mirrors real HOSA Round 1), back/forward navigation, full review at the end, flags 70%+ scores (NAP's real recognition threshold)
-* Missed Questions: auto-built from each question's most recent wrong answer
+* Missed Questions: spaced repetition (`lib/review.js`). A missed question stays until it's answered right on 2 different Eastern calendar days since its latest miss; right twice on one day counts once, so a question answered right today waits until tomorrow. Dashboard shows the count due today.
+* 3 choices mode: toggle in Practice / Missed / Flagged / Mock Test intro (remembered per device in localStorage). Hides one wrong answer — the same one for the whole session — and re-letters A–C to match the real HOSA format. The 301 questions with answers like "All of the above" always keep four, because hiding one would break them. Attempts still store the bank's original letter.
+* Motion Drill (`lib/motionDrill.js`, `components/MotionDrill.jsx`): "is this motion in order?" against a generated pending stack, built on the 13-rank precedence ladder in `motions.js`. Handles the real exceptions (Amend applied to a higher-ranking amendable motion, secondary vs third-degree amendments, an amendment inheriting the rank of the motion it amends). Excludes Question of Privilege and Orders of the Day, whose legality depends on circumstances a card can't show. Local session score only — nothing is written to Supabase.
+* Answer explanations (`data/explanations.js`): shown after answering (and on missed mock-test questions). Written in our own words from RONR 12th ed. with paragraph citations; a `conflict` note appears where Dunbar's key is ambiguous or out of step with the 12th edition. First batch covers the 18 questions teammates had missed as of 2026-09-15.
 * Flagged Questions: manual star/flag, `F` keyboard shortcut
 * Vocabulary: 79 terms, browse (search + filter) and flashcard modes
 * Reference: full motions precedence chart (privileged/incidental/subsidiary/main/bring-back classes) + 4-tier study priority list from a frequency analysis of the original Dunbar files
-* Team tab: leaderboard with This Week / All-Time toggle. "This Week" resets Friday 00:00 US Eastern Time, DST-aware (tested against the Nov 2026 fall-back transition specifically — see `challengeWeek.js`). Everyone sees name + accuracy; captain role additionally gets a per-teammate category-breakdown drill-down.
+* Team tab: leaderboard with This Week / All-Time toggle. "This Week" resets Friday 12:00 AM US Eastern Time for every viewer regardless of device time zone, DST-aware (see `challengeWeek.js`; no automated tests are checked in — it was verified by hand across both 2026 DST transitions and six device time zones). Everyone sees name + accuracy; captain role additionally gets a per-teammate category-breakdown drill-down.
 * Dashboard: overall accuracy/avg time/coverage, accuracy-over-time line chart, day streak, weakest-category callout, recent activity feed
 * Settings: account info, the calibration/limitations notes from §4 above, CSV export of personal history, clear-history option
 * Keyboard shortcuts: `A`–`D`/`1`–`4` to answer, `Enter` for next, `F` to flag

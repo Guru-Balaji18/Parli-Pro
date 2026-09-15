@@ -3,6 +3,7 @@ import './App.css'
 import TeamAuth from './components/TeamAuth'
 import Dashboard from './components/Dashboard'
 import Practice from './components/Practice'
+import MotionDrill from './components/MotionDrill'
 import Vocab from './components/Vocab'
 import Reference from './components/Reference'
 import Team from './components/Team'
@@ -16,6 +17,7 @@ const NAV = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'practice', label: 'Practice' },
   { id: 'exam', label: 'Mock Test' },
+  { id: 'drill', label: 'Motion Drill' },
   { id: 'review', label: 'Missed' },
   { id: 'flagged', label: 'Flagged' },
   { id: 'team', label: 'Team' },
@@ -91,6 +93,7 @@ function App() {
           {drillModes.includes(view) && (
             <Practice key={view} mode={view} record={record} profile={profile} onLookup={handleLookup} />
           )}
+          {view === 'drill' && <MotionDrill onLookup={handleLookup} />}
           {view === 'team' && <Team profile={profile} />}
           {view === 'vocab' && <Vocab jumpTo={view === 'vocab' ? jumpAnchor : null} />}
           {view === 'reference' && <Reference jumpTo={view === 'reference' ? jumpAnchor : null} />}

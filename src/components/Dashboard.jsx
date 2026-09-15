@@ -4,7 +4,8 @@ import {
 } from 'recharts'
 import { CATEGORIES, CATEGORY_MAP } from '../data/categories'
 import questions from '../data/questions.json'
-import { currentStreak, dailyAccuracy, missedQuestionIds, summarize } from '../lib/useRecord'
+import { currentStreak, dailyAccuracy, summarize } from '../lib/useRecord'
+import { reviewState } from '../lib/review'
 
 const TOTAL_Q = questions.length
 
@@ -29,7 +30,7 @@ export default function Dashboard({ record, goTo }) {
 
   const s = summarize(attempts)
   const streak = currentStreak(attempts)
-  const missed = missedQuestionIds(attempts)
+  const review = reviewState(attempts)
   const trend = dailyAccuracy(attempts)
 
   const byCat = {}
@@ -73,8 +74,8 @@ export default function Dashboard({ record, goTo }) {
           <div>day{streak === 1 ? '' : 's'} in a row</div>
         </div>
         <button className="callout clickable" onClick={() => goTo('review')}>
-          <div className="callout-num mono">{missed.size}</div>
-          <div>to review →</div>
+          <div className="callout-num mono">{review.due.size}</div>
+          <div>due for review →</div>
         </button>
         <button className="callout clickable" onClick={() => goTo('flagged')}>
           <div className="callout-num mono">{flags?.size ?? 0}</div>

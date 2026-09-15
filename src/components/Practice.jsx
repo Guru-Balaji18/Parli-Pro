@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { missedQuestionIds } from '../lib/useRecord'
+import { REVIEW_CLEAR_DAYS, reviewState } from '../lib/review'
 import { CATEGORIES } from '../data/categories'
+import { EXPLANATIONS } from '../data/explanations'
 import { findLookup } from '../lib/lookup'
 import questions from '../data/questions.json'
 
@@ -17,6 +18,13 @@ function shuffle(arr) {
 const LETTERS = ['A', 'B', 'C', 'D']
 const EXAM_COUNT = 50
 const EXAM_SECONDS = 60 * 60
+const THREE_CHOICE_KEY = 'ppa_three_choice'
+const NO_SESSION = { count: 0, correct: 0, totalTime: 0 }
+
+// Hiding a choice and re-lettering the rest breaks answers like "All of the
+// above" or "Both A and C", so questions with those always keep all four.
+const REFERS_TO_WORDS = /\b(above|below|both|neither|all of these|none of these)\b/i
+const REFERS_TO_LETTERS = /\b[A-D]\b\s*(,|and|or|&)\s*(and\s+|or\s+)?\b[A-D]\b|\banswers? [A-D]\b/
 
 function fmtClock(s) {
   const m = Math.floor(Math.abs(s) / 60)
@@ -24,8 +32,31 @@ function fmtClock(s) {
   return `${s < 0 ? '-' : ''}${m}:${String(sec).padStart(2, '0')}`
 }
 
+function hash(str) {
+  let h = 2166136261
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return h >>> 0
+}
+
+// `shown` is the on-screen letter, `orig` the bank's own letter. In three-choice
+// mode one wrong answer is hidden — the same one for the rest of the session.
+function layoutOptions(q, threeChoice, seed) {
+  let letters = LETTERS.filter((l) => q.options[l])
+  const canHide = letters.length === 4 &&
+    !letters.some((l) => REFERS_TO_WORDS.test(q.options[l]) || REFERS_TO_LETTERS.test(q.options[l]))
+  if (threeChoice && canHide) {
+    const wrong = letters.filter((l) => l !== q.answer)
+    const hidden = wrong[hash(`${seed}:${q.id}`) % wrong.length]
+    letters = letters.filter((l) => l !== hidden)
+  }
+  return letters.map((orig, i) => ({ shown: LETTERS[i], orig, text: q.options[orig] }))
+}
+
 export default function Practice({ mode, record, profile, onLookup }) {
-  const { attempts, flags, reload } = record
+  const { attempts, flags, reload, setFlags } = record
   const isExam = mode === 'exam'
   const isReview = mode === 'review'
   const isFlagged = mode === 'flagged'
@@ -38,30 +69,36 @@ export default function Practice({ mode, record, profile, onLookup }) {
 
   const [selected, setSelected] = useState(() => CATEGORIES.map((c) => c.id))
   const [filterOpen, setFilterOpen] = useState(false)
+  const [threeChoice, setThreeChoice] = useState(() => {
+    try {
+      return localStorage.getItem(THREE_CHOICE_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+  const [seed] = useState(() => Math.floor(Math.random() * 2 ** 31))
   const [queue, setQueue] = useState([])
   const [index, setIndex] = useState(0)
   const [answer, setAnswer] = useState(null)
   const [revealed, setRevealed] = useState(false)
   const [elapsed, setElapsed] = useState(0)
-  const [session, setSession] = useState({ count: 0, correct: 0, totalTime: 0 })
+  const [session, setSession] = useState(NO_SESSION)
   const [examState, setExamState] = useState('idle') // idle | running | done
   const [examRemaining, setExamRemaining] = useState(EXAM_SECONDS)
   const [examAnswers, setExamAnswers] = useState({})
   const startRef = useRef(performance.now())
   const examStartRef = useRef(null)
+  const pendingWrites = useRef([])
+  const finishExamRef = useRef(null)
 
-  const basePool = useMemo(() => {
-    if (isReview) {
-      if (!attempts) return []
-      const missed = missedQuestionIds(attempts)
-      return questions.filter((q) => missed.has(q.id))
-    }
-    if (isFlagged) {
-      if (!flags) return []
-      return questions.filter((q) => flags.has(q.id))
-    }
-    return questions.filter((q) => selected.includes(q.category_id))
-  }, [isReview, isFlagged, attempts, flags, selected])
+  // Each mode's pool depends only on its own source, so flagging a question or
+  // refreshing the record doesn't reshuffle a practice round in progress.
+  const practicePool = useMemo(() => questions.filter((q) => selected.includes(q.category_id)), [selected])
+  const review = useMemo(() => (attempts ? reviewState(attempts) : null), [attempts])
+  const reviewPool = useMemo(() => (review ? questions.filter((q) => review.due.has(q.id)) : []), [review])
+  const flaggedPool = useMemo(() => (flags ? questions.filter((q) => flags.has(q.id)) : []), [flags])
+  const basePool = isReview ? reviewPool : isFlagged ? flaggedPool : practicePool
+  const poolLoading = (isReview && !attempts) || (isFlagged && !flags)
 
   const resetRound = useCallback((pool) => {
     setQueue(shuffle(pool))
@@ -75,8 +112,12 @@ export default function Practice({ mode, record, profile, onLookup }) {
   useEffect(() => {
     if (isExam) return
     resetRound(basePool)
-    setSession({ count: 0, correct: 0, totalTime: 0 })
   }, [basePool, isExam, resetRound])
+
+  function changeSelected(ids) {
+    setSelected(ids)
+    setSession(NO_SESSION)
+  }
 
   // per-question stopwatch
   useEffect(() => {
@@ -88,22 +129,42 @@ export default function Practice({ mode, record, profile, onLookup }) {
     return () => clearInterval(t)
   }, [revealed, index, queue.length, isExam, examState])
 
+  // The countdown's interval outlives many renders; going through a ref makes a
+  // time-up submission use the answers given so far, not the ones at the start.
+  useEffect(() => {
+    finishExamRef.current = finishExam
+  })
+
   // exam countdown
   useEffect(() => {
     if (!isExam || examState !== 'running') return
     const t = setInterval(() => {
       const left = EXAM_SECONDS - (performance.now() - examStartRef.current) / 1000
       setExamRemaining(left)
-      if (left <= 0) finishExam()
+      if (left <= 0) {
+        clearInterval(t)
+        finishExamRef.current()
+      }
     }, 250)
     return () => clearInterval(t)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isExam, examState])
 
   const current = queue[index]
+  const layout = useMemo(() => (current ? layoutOptions(current, threeChoice, seed) : []), [current, threeChoice, seed])
+  const shownLetter = (q, orig) => layoutOptions(q, threeChoice, seed).find((o) => o.orig === orig)?.shown ?? orig
+
+  const refreshRecord = useCallback(() => {
+    const writes = pendingWrites.current
+    pendingWrites.current = []
+    return Promise.allSettled(writes).then(() => reload())
+  }, [reload])
+
+  // Answers save in the background; refresh on the way out so the Dashboard and
+  // Missed list reflect this session.
+  useEffect(() => () => { refreshRecord() }, [refreshRecord])
 
   const logAttempt = useCallback((q, letter, seconds, correct) => {
-    supabase
+    const write = supabase
       .from('attempts')
       .insert({
         question_id: q.id,
@@ -115,6 +176,7 @@ export default function Practice({ mode, record, profile, onLookup }) {
         user_id: profile.id,
       })
       .then(({ error }) => error && console.error(error))
+    pendingWrites.current.push(write)
   }, [mode, profile.id])
 
   function pick(letter) {
@@ -143,6 +205,9 @@ export default function Practice({ mode, record, profile, onLookup }) {
   function next() {
     if (index + 1 >= queue.length) {
       if (isExam) return finishExam()
+      // Re-pull the record so questions answered right today wait for tomorrow
+      // instead of coming straight back.
+      if (isReview) return refreshRecord()
       resetRound(basePool)
       return
     }
@@ -162,11 +227,29 @@ export default function Practice({ mode, record, profile, onLookup }) {
   }
 
   async function toggleFlag() {
-    if (!current) return
-    const on = flags?.has(current.id)
-    if (on) await supabase.from('flags').delete().eq('question_id', current.id).eq('user_id', profile.id)
-    else await supabase.from('flags').insert({ question_id: current.id, user_id: profile.id })
-    reload()
+    if (!current || !flags) return
+    const id = current.id
+    const on = flags.has(id)
+    const { error } = on
+      ? await supabase.from('flags').delete().eq('question_id', id).eq('user_id', profile.id)
+      : await supabase.from('flags').insert({ question_id: id, user_id: profile.id })
+    if (error) return console.error(error)
+    setFlags((prevFlags) => {
+      const nextFlags = new Set(prevFlags)
+      if (on) nextFlags.delete(id)
+      else nextFlags.add(id)
+      return nextFlags
+    })
+  }
+
+  function toggleThreeChoice() {
+    const on = !threeChoice
+    setThreeChoice(on)
+    try {
+      localStorage.setItem(THREE_CHOICE_KEY, on ? '1' : '0')
+    } catch {
+      // storage unavailable (private browsing); the setting just won't persist
+    }
   }
 
   function startExam() {
@@ -192,26 +275,31 @@ export default function Practice({ mode, record, profile, onLookup }) {
       if (ok) correct += 1
       logAttempt(q, a.letter, a.seconds, ok)
     }
-    supabase
-      .from('exam_sessions')
-      .insert({
-        question_count: queue.length,
-        correct_count: correct,
-        duration_seconds: Math.round(duration),
-        finished_at: new Date().toISOString(),
-        user_id: profile.id,
-      })
-      .then(() => reload())
+    pendingWrites.current.push(
+      supabase
+        .from('exam_sessions')
+        .insert({
+          question_count: queue.length,
+          correct_count: correct,
+          duration_seconds: Math.round(duration),
+          finished_at: new Date().toISOString(),
+          user_id: profile.id,
+        })
+        .then(({ error }) => error && console.error(error))
+    )
+    refreshRecord()
   }
 
   // keyboard shortcuts
   useEffect(() => {
     function onKey(e) {
-      if (e.target.tagName === 'INPUT') return
+      if (e.target.tagName === 'INPUT' || e.ctrlKey || e.metaKey || e.altKey) return
       const k = e.key.toLowerCase()
-      if (['a', 'b', 'c', 'd'].includes(k)) pick(k.toUpperCase())
-      else if (['1', '2', '3', '4'].includes(k)) pick(LETTERS[Number(k) - 1])
-      else if (e.key === 'Enter' || e.key === ' ') {
+      const letterSlot = ['a', 'b', 'c', 'd'].indexOf(k)
+      const slot = letterSlot >= 0 ? letterSlot : ['1', '2', '3', '4'].indexOf(k)
+      if (slot >= 0) {
+        if (layout[slot]) pick(layout[slot].orig)
+      } else if (e.key === 'Enter' || e.key === ' ') {
         if (revealed || isExam) {
           e.preventDefault()
           next()
@@ -224,6 +312,7 @@ export default function Practice({ mode, record, profile, onLookup }) {
 
   const sessionAccuracy = session.count ? Math.round((session.correct / session.count) * 100) : null
   const sessionAvgTime = session.count ? session.totalTime / session.count : null
+  const choiceToggle = <ThreeChoiceToggle on={threeChoice} onToggle={toggleThreeChoice} />
 
   // ---------- exam intro / results ----------
   if (isExam && examState === 'idle') {
@@ -240,11 +329,13 @@ export default function Practice({ mode, record, profile, onLookup }) {
         </div>
         <CategoryFilter
           selected={selected}
-          setSelected={setSelected}
+          setSelected={changeSelected}
           counts={countsByCategory}
           open={filterOpen}
           setOpen={setFilterOpen}
-        />
+        >
+          {choiceToggle}
+        </CategoryFilter>
         <button className="next-btn" onClick={startExam} disabled={selected.length === 0}>
           Start the 60-minute test
         </button>
@@ -296,16 +387,19 @@ export default function Practice({ mode, record, profile, onLookup }) {
                 <div className="er-a">
                   {a ? (
                     <>
-                      You: <strong>{a.letter}</strong> — {q.options[a.letter]}
+                      You: <strong>{shownLetter(q, a.letter)}</strong> — {q.options[a.letter]}
                     </>
                   ) : (
                     <em>Left blank</em>
                   )}
                 </div>
                 {!ok && (
-                  <div className="er-correct">
-                    Correct: <strong>{q.answer}</strong> — {q.options[q.answer]}
-                  </div>
+                  <>
+                    <div className="er-correct">
+                      Correct: <strong>{shownLetter(q, q.answer)}</strong> — {q.options[q.answer]}
+                    </div>
+                    <Explanation id={q.id} />
+                  </>
                 )}
                 <div className="er-src">
                   {q.category}
@@ -323,13 +417,14 @@ export default function Practice({ mode, record, profile, onLookup }) {
     )
   }
 
-  // ---------- empty states ----------
+  // ---------- practice / review / flagged ----------
   const heads = {
     practice: { eyebrow: 'Question bank', title: 'Practice', blurb: `${basePool.length.toLocaleString()} questions in the current filter. Reshuffles and keeps going until you stop.` },
-    review: { eyebrow: 'Targeted drilling', title: 'Missed Questions', blurb: 'Every question you got wrong the last time you saw it. Answer it right and it leaves this list.' },
+    review: { eyebrow: 'Targeted drilling', title: 'Missed Questions', blurb: `Questions you've missed. Each one leaves this list once you've answered it right on ${REVIEW_CLEAR_DAYS} different days — right twice in one day counts once.` },
     flagged: { eyebrow: 'Targeted drilling', title: 'Flagged Questions', blurb: 'Questions you marked to come back to. Press F to flag or unflag.' },
   }
   const head = heads[mode] || heads.practice
+  const correctShown = current ? layout.find((o) => o.orig === current.answer)?.shown : null
 
   return (
     <div>
@@ -351,12 +446,16 @@ export default function Practice({ mode, record, profile, onLookup }) {
       {mode === 'practice' && (
         <CategoryFilter
           selected={selected}
-          setSelected={setSelected}
+          setSelected={changeSelected}
           counts={countsByCategory}
           open={filterOpen}
           setOpen={setFilterOpen}
-        />
+        >
+          {choiceToggle}
+        </CategoryFilter>
       )}
+
+      {(isReview || isFlagged) && <div className="practice-tools">{choiceToggle}</div>}
 
       {session.count > 0 && !isExam && (
         <div className="session-bar">
@@ -366,10 +465,14 @@ export default function Practice({ mode, record, profile, onLookup }) {
         </div>
       )}
 
-      {!current && basePool.length === 0 && (
+      {poolLoading && <div className="empty-state">Loading your record…</div>}
+
+      {!current && !poolLoading && basePool.length === 0 && (
         <div className="empty-state">
           {isReview
-            ? "Nothing to review — you haven't missed anything yet."
+            ? review?.waiting.size
+              ? `All caught up for today. ${review.waiting.size} ${review.waiting.size === 1 ? 'question comes' : 'questions come'} back tomorrow for a second right answer.`
+              : "Nothing to review — you haven't missed anything yet."
             : isFlagged
             ? 'No flagged questions. Press F while practicing to flag one.'
             : 'Pick at least one category to start.'}
@@ -381,6 +484,11 @@ export default function Practice({ mode, record, profile, onLookup }) {
           <div className="q-card-top">
             <span className="q-cat">{current.category}</span>
             <div className="q-card-tools">
+              {isReview && review?.progress.has(current.id) && (
+                <span className="review-progress">
+                  Right on {review.progress.get(current.id)} of {REVIEW_CLEAR_DAYS} days
+                </span>
+              )}
               <button
                 className={`flag-btn ${flags?.has(current.id) ? 'on' : ''}`}
                 onClick={toggleFlag}
@@ -395,22 +503,24 @@ export default function Practice({ mode, record, profile, onLookup }) {
           </div>
           <div className="q-text">{current.question}</div>
           <div className="q-options">
-            {LETTERS.map((letter) => {
-              const text = current.options[letter]
-              if (!text) return null
+            {layout.map(({ shown, orig, text }) => {
               let cls = 'q-option'
               if (revealed) {
-                if (letter === current.answer) cls += ' correct'
-                else if (letter === answer) cls += ' incorrect'
-              } else if (letter === answer) cls += ' selected'
+                if (orig === current.answer) cls += ' correct'
+                else if (orig === answer) cls += ' incorrect'
+              } else if (orig === answer) cls += ' selected'
               return (
-                <button key={letter} className={cls} onClick={() => pick(letter)} disabled={revealed}>
-                  <span className="q-letter">{letter}</span>
+                <button key={orig} className={cls} onClick={() => pick(orig)} disabled={revealed}>
+                  <span className="q-letter">{shown}</span>
                   <span>{text}</span>
                 </button>
               )
             })}
           </div>
+
+          {threeChoice && layout.length === 4 && (
+            <div className="choice-note">All four choices kept: one of them refers to the others.</div>
+          )}
 
           {isExam && (
             <div className="exam-nav">
@@ -424,8 +534,12 @@ export default function Practice({ mode, record, profile, onLookup }) {
           {revealed && (
             <div className="q-feedback">
               <div className={answer === current.answer ? 'verdict correct' : 'verdict incorrect'}>
-                {answer === current.answer ? 'Correct' : `Incorrect — answer is ${current.answer}`}
+                {answer === current.answer ? 'Correct' : `Incorrect — answer is ${correctShown}`}
               </div>
+              {isReview && (
+                <ReviewNote correct={answer === current.answer} daysBefore={review?.progress.get(current.id) ?? 0} />
+              )}
+              <Explanation id={current.id} />
               <div className="q-source">
                 {current.source}
                 {current.ronr_pages ? ` · cited to RONR p. ${current.ronr_pages}` : ''}
@@ -439,10 +553,42 @@ export default function Practice({ mode, record, profile, onLookup }) {
 
       {current && (
         <div className="shortcut-hint">
-          A–D or 1–4 to answer · Enter for next · F to flag
+          A–{layout[layout.length - 1]?.shown} or 1–{layout.length} to answer · Enter for next · F to flag
         </div>
       )}
     </div>
+  )
+}
+
+function ReviewNote({ correct, daysBefore }) {
+  let text
+  if (!correct) text = 'Missed again, so the count starts over. It stays on your list.'
+  else if (daysBefore + 1 >= REVIEW_CLEAR_DAYS) text = `That's ${REVIEW_CLEAR_DAYS} different days, so this one leaves your Missed list.`
+  else text = `Right on ${daysBefore + 1} of ${REVIEW_CLEAR_DAYS} days. It comes back tomorrow; get it right again to clear it.`
+  return <p className="review-note">{text}</p>
+}
+
+function Explanation({ id }) {
+  const note = EXPLANATIONS[id]
+  if (!note) return null
+  return (
+    <div className={`explanation ${note.conflict ? 'conflict' : ''}`}>
+      <div className="explanation-label">Why</div>
+      <p>{note.why}</p>
+      {note.conflict && (
+        <p className="explanation-conflict"><strong>Heads up:</strong> {note.conflict}</p>
+      )}
+      {note.cite && <div className="explanation-cite">{note.cite}</div>}
+    </div>
+  )
+}
+
+function ThreeChoiceToggle({ on, onToggle }) {
+  return (
+    <button type="button" className={`choice-toggle ${on ? 'on' : ''}`} onClick={onToggle} aria-pressed={on}>
+      <span className="choice-toggle-track" aria-hidden="true"><span /></span>
+      3 choices, like the HOSA test
+    </button>
   )
 }
 
@@ -465,13 +611,16 @@ function LookupLink({ question, onLookup }) {
   )
 }
 
-function CategoryFilter({ selected, setSelected, counts, open, setOpen }) {
+function CategoryFilter({ selected, setSelected, counts, open, setOpen, children }) {
   return (
     <>
-      <button className="filter-toggle" onClick={() => setOpen(!open)}>
-        {open ? 'Hide categories' : 'Filter categories'}
-        <span className="filter-count">{selected.length}/{CATEGORIES.length}</span>
-      </button>
+      <div className="practice-tools">
+        <button className="filter-toggle" onClick={() => setOpen(!open)}>
+          {open ? 'Hide categories' : 'Filter categories'}
+          <span className="filter-count">{selected.length}/{CATEGORIES.length}</span>
+        </button>
+        {children}
+      </div>
       {open && (
         <div className="filter-panel">
           <div className="filter-actions">

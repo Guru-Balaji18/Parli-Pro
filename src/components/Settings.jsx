@@ -76,7 +76,9 @@ export default function Settings({ profile, record, onLogout }) {
           </li>
           <li>
             <strong>Answer-choice count:</strong> HOSA's sample questions offer three answer
-            choices; this bank is four. Harder to guess here than on the real test.
+            choices; this bank is four. Turn on "3 choices" in Practice or the Mock Test to
+            hide one wrong answer and match the real format. Questions with answers like
+            "All of the above" keep all four, since hiding one would break them.
           </li>
           <li>
             <strong>Watch the terminology:</strong> RONR's 12th edition renamed

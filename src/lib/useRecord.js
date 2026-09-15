@@ -32,15 +32,6 @@ export function useRecord(profile) {
   return { attempts, flags, error, reload, setFlags }
 }
 
-// Questions answered wrong on the most recent attempt for that question.
-export function missedQuestionIds(attempts) {
-  const latest = new Map()
-  for (const a of attempts) {
-    if (!latest.has(a.question_id)) latest.set(a.question_id, a.is_correct)
-  }
-  return new Set([...latest.entries()].filter(([, ok]) => !ok).map(([id]) => id))
-}
-
 export function summarize(attempts) {
   if (!attempts.length) return null
   const total = attempts.length
