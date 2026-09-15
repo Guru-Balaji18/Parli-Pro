@@ -1,29 +1,62 @@
-@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;0,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 :root {
-  /* "Cover" — the dark canvas the whole app sits on, like a bound manual's cover on a table */
-  --cover: #10161d;
-  --cover-edge: #1a2330;
-  --cover-line: rgba(244, 238, 220, 0.09);
+  /* Cover — the dark desk the bound manual lies on */
+  --cover: #101722;
+  --cover-2: #18222f;
+  --cover-line: rgba(243, 238, 226, 0.1);
 
-  /* "Page" — the lit paper panel content actually sits on */
-  --page: #efe6cd;
-  --page-dim: #e6dab9;
-  --ink: #221d15;
+  /* Paper — warm white, not sepia. Cards sit a half-step above it. */
+  --page: #faf7f0;
+  --page-2: #f2ede1;
+  --surface: #ffffff;
+  --surface-2: #fbf9f4;
 
-  --navy: #1c2b3a;
-  --navy-deep: #131f2b;
-  --brass: #a9782f;
-  --brass-bright: #d9a544;
-  --forest: #3a5a40;
-  --oxblood: #7a3030;
+  /* Ink */
+  --ink: #1b1a17;
+  --ink-2: #4c4841;
+  --ink-3: #6b665e;
+  /* ink-4 is the faintest text used (metadata, hints) — still holds 4.5:1
+     on paper, so nothing in the UI drops below AA. */
+  --ink-4: #757067;
+  --ink-on-dark: #f3eee2;
+  --ink-on-dark-2: rgba(243, 238, 226, 0.68);
+  --ink-on-dark-3: rgba(243, 238, 226, 0.58);
 
-  --rule-line: rgba(34, 29, 21, 0.14);
-  --rule-line-strong: rgba(34, 29, 21, 0.28);
+  /* Accents */
+  --navy: #1a2a3a;
+  --navy-deep: #13202c;
+  --brass: #8a6413;
+  --brass-bright: #d6a851;
+  --brass-tint: rgba(138, 100, 19, 0.09);
+  --brass-tint-2: rgba(138, 100, 19, 0.16);
+  --good: #2d5a38;
+  --good-tint: rgba(45, 90, 56, 0.1);
+  --bad: #8c2f2f;
+  --bad-tint: rgba(140, 47, 47, 0.1);
 
+  /* Rules */
+  --rule: rgba(27, 26, 23, 0.13);
+  --rule-2: rgba(27, 26, 23, 0.26);
+
+  /* Elevation */
+  --shadow-card: 0 1px 2px rgba(27, 26, 23, 0.05);
+  --shadow-raised: 0 2px 6px -2px rgba(27, 26, 23, 0.12), 0 1px 2px rgba(27, 26, 23, 0.05);
+  --shadow-page:
+    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+    0 32px 64px -28px rgba(0, 0, 0, 0.7),
+    0 2px 6px rgba(0, 0, 0, 0.14);
+
+  --radius: 3px;
+  --radius-lg: 4px;
+
+  /* Type */
   --font-display: 'EB Garamond', Georgia, serif;
-  --font-body: 'IBM Plex Sans', -apple-system, sans-serif;
-  --font-mono: 'IBM Plex Mono', 'SF Mono', monospace;
+  --font-body: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', 'SF Mono', ui-monospace, monospace;
+
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur: 160ms;
 
   color-scheme: light;
 }
@@ -42,15 +75,18 @@ body {
   color: var(--ink);
   font-family: var(--font-body);
   font-size: 16px;
-  line-height: 1.5;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-h1, h2, h3 {
+h1, h2, h3, h4 {
   font-family: var(--font-display);
   font-weight: 600;
+  letter-spacing: -0.008em;
   margin: 0;
   color: var(--navy-deep);
+  line-height: 1.2;
 }
 
 button {
@@ -66,21 +102,25 @@ a {
   outline-offset: 2px;
 }
 
+/* Numerals in data positions never reflow as values change */
 .mono {
   font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
-/* Ledger-index label: italic serif instead of the generic mono-caps tag
-   treatment, used for short textual labels (categories, table headers). */
-.label-index {
-  font-family: var(--font-display);
-  font-style: italic;
-  font-weight: 500;
-  letter-spacing: 0.01em;
+/* Small structural label. Sans, not italic serif — the serif is reserved
+   for display type so it reads as emphasis rather than decoration. */
+.label {
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-3);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  * {
+  *, *::before, *::after {
     animation-duration: 0.001ms !important;
     transition-duration: 0.001ms !important;
   }

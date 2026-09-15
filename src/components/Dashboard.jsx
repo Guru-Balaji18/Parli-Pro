@@ -17,7 +17,11 @@ export default function Dashboard({ record, goTo }) {
     return (
       <Shell blurb="Nothing recorded yet.">
         <div className="empty-state">
-          Head to Practice to answer your first question — stats appear here as you go.
+          <p>Answer your first question and your accuracy, timing and weak
+          categories start building here.</p>
+          <button className="next-btn" onClick={() => goTo('practice')}>
+            Start practising →
+          </button>
         </div>
       </Shell>
     )
@@ -52,7 +56,7 @@ export default function Dashboard({ record, goTo }) {
   const chartData = catRows.slice().sort((a, b) => b.accuracy - a.accuracy)
   const weakest = catRows.slice().sort((a, b) => a.accuracy - b.accuracy)[0]
 
-  const barColor = (v) => (v >= 80 ? '#3a5a40' : v >= 60 ? '#a9782f' : '#7a3030')
+  const barColor = (v) => (v >= 80 ? '#2d5a38' : v >= 60 ? '#8a6413' : '#8c2f2f')
 
   return (
     <Shell blurb="Your record, synced across every device.">
@@ -91,14 +95,14 @@ export default function Dashboard({ record, goTo }) {
           <div className="chart-wrap">
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={trend} margin={{ left: 0, right: 16, top: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(28,26,23,0.1)" />
-                <XAxis dataKey="day" stroke="rgba(28,26,23,0.5)" fontSize={12} />
-                <YAxis domain={[0, 100]} tickFormatter={(v) => `${v}%`} stroke="rgba(28,26,23,0.5)" fontSize={12} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(27,26,23,0.1)" />
+                <XAxis dataKey="day" stroke="rgba(27,26,23,0.5)" fontSize={12} />
+                <YAxis domain={[0, 100]} tickFormatter={(v) => `${v}%`} stroke="rgba(27,26,23,0.5)" fontSize={12} />
                 <Tooltip
                   formatter={(v, n, p) => [`${v}% (${p.payload.count} questions)`, 'Accuracy']}
-                  contentStyle={{ fontFamily: 'IBM Plex Sans', fontSize: 13, border: '1px solid rgba(28,26,23,0.2)' }}
+                  contentStyle={{ fontFamily: 'IBM Plex Sans', fontSize: 13, border: '1px solid rgba(27,26,23,0.2)' }}
                 />
-                <Line type="monotone" dataKey="accuracy" stroke="#1c2b3a" strokeWidth={2} dot={{ r: 3, fill: '#a9782f' }} />
+                <Line type="monotone" dataKey="accuracy" stroke="#1a2a3a" strokeWidth={2} dot={{ r: 3, fill: '#8a6413' }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -109,10 +113,10 @@ export default function Dashboard({ record, goTo }) {
       <div className="chart-wrap">
         <ResponsiveContainer width="100%" height={Math.max(240, chartData.length * 34)}>
           <BarChart data={chartData} layout="vertical" margin={{ left: 12, right: 24 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(28,26,23,0.1)" horizontal={false} />
-            <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} stroke="rgba(28,26,23,0.5)" fontSize={12} />
-            <YAxis type="category" dataKey="name" width={150} stroke="rgba(28,26,23,0.5)" fontSize={12} />
-            <Tooltip formatter={(v) => `${v}%`} contentStyle={{ fontFamily: 'IBM Plex Sans', fontSize: 13, border: '1px solid rgba(28,26,23,0.2)' }} />
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(27,26,23,0.1)" horizontal={false} />
+            <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} stroke="rgba(27,26,23,0.5)" fontSize={12} />
+            <YAxis type="category" dataKey="name" width={150} stroke="rgba(27,26,23,0.5)" fontSize={12} />
+            <Tooltip formatter={(v) => `${v}%`} contentStyle={{ fontFamily: 'IBM Plex Sans', fontSize: 13, border: '1px solid rgba(27,26,23,0.2)' }} />
             <Bar dataKey="accuracy" radius={[0, 3, 3, 0]}>
               {chartData.map((e, i) => <Cell key={i} fill={barColor(e.accuracy)} />)}
             </Bar>

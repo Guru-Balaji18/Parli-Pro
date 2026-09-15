@@ -366,7 +366,7 @@ export default function Practice({ mode, record, profile, onLookup }) {
         </div>
       )}
 
-      {!current && (
+      {!current && basePool.length === 0 && (
         <div className="empty-state">
           {isReview
             ? "Nothing to review — you haven't missed anything yet."
@@ -385,8 +385,10 @@ export default function Practice({ mode, record, profile, onLookup }) {
                 className={`flag-btn ${flags?.has(current.id) ? 'on' : ''}`}
                 onClick={toggleFlag}
                 title="Flag this question (F)"
+                aria-pressed={flags?.has(current.id) ? 'true' : 'false'}
               >
-                {flags?.has(current.id) ? '★ Flagged' : '☆ Flag'}
+                <StarIcon filled={flags?.has(current.id)} />
+                {flags?.has(current.id) ? 'Flagged' : 'Flag'}
               </button>
               {!isExam && <span className="q-timer mono">{elapsed.toFixed(1)}s</span>}
             </div>
@@ -441,6 +443,14 @@ export default function Practice({ mode, record, profile, onLookup }) {
         </div>
       )}
     </div>
+  )
+}
+
+function StarIcon({ filled }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+      <path d="M12 3.5l2.6 5.55 5.9.8-4.3 4.3 1.05 6.05L12 17.3l-5.25 2.9L7.8 14.15 3.5 9.85l5.9-.8L12 3.5z" />
+    </svg>
   )
 }
 

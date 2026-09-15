@@ -94,6 +94,7 @@ export default function Team({ profile }) {
         <div className="empty-state">Loading the team…</div>
       ) : (
         <>
+          <div className="table-scroll">
           <table className="cat-table team-table">
             <thead>
               <tr>
@@ -108,7 +109,7 @@ export default function Team({ profile }) {
             <tbody>
               {active.map((b) => (
                 <tr key={b.user_id} className={b.user_id === profile.id ? 'is-me' : ''}>
-                  <td>{b.display_name}{b.user_id === profile.id ? ' (you)' : ''}</td>
+                  <td className="team-name">{b.display_name}{b.user_id === profile.id ? ' (you)' : ''}</td>
                   <td className="mono">{b.total}</td>
                   <td className="mono">
                     <span className={b.accuracy >= 80 ? 'pill good' : b.accuracy >= 60 ? 'pill mid' : 'pill low'}>
@@ -128,6 +129,7 @@ export default function Team({ profile }) {
               ))}
             </tbody>
           </table>
+          </div>
 
           {inactive.length > 0 && (
             <p className="footnote" style={{ marginTop: 12 }}>
@@ -154,13 +156,13 @@ export default function Team({ profile }) {
             <div className="chart-wrap">
               <ResponsiveContainer width="100%" height={Math.max(180, detail.length * 34)}>
                 <BarChart data={detail} layout="vertical" margin={{ left: 12, right: 24 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(34,29,21,0.1)" horizontal={false} />
-                  <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} stroke="rgba(34,29,21,0.5)" fontSize={12} />
-                  <YAxis type="category" dataKey="name" width={150} stroke="rgba(34,29,21,0.5)" fontSize={12} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(27,26,23,0.1)" horizontal={false} />
+                  <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} stroke="rgba(27,26,23,0.5)" fontSize={12} />
+                  <YAxis type="category" dataKey="name" width={150} stroke="rgba(27,26,23,0.5)" fontSize={12} />
                   <Tooltip formatter={(v) => `${v}%`} contentStyle={{ fontFamily: 'IBM Plex Sans', fontSize: 13 }} />
                   <Bar dataKey="accuracy" radius={[0, 3, 3, 0]}>
                     {detail.map((e, i) => (
-                      <Cell key={i} fill={e.accuracy >= 80 ? '#3a5a40' : e.accuracy >= 60 ? '#a9782f' : '#7a3030'} />
+                      <Cell key={i} fill={e.accuracy >= 80 ? '#2d5a38' : e.accuracy >= 60 ? '#8a6413' : '#8c2f2f'} />
                     ))}
                   </Bar>
                 </BarChart>

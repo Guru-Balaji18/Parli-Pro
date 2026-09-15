@@ -45,31 +45,33 @@ export default function Reference({ jumpTo }) {
             <section key={cls.id} className="motion-class">
               <h3 className="section-title">{cls.label}</h3>
               <p className="class-note">{cls.note}</p>
-              <table className="cat-table motion-table">
-                <thead>
-                  <tr>
-                    <th>Motion</th>
-                    <th>Second</th>
-                    <th>Debatable</th>
-                    <th>Amendable</th>
-                    <th>Vote</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cls.motions.map((m) => (
-                    <tr key={m.name} id={slugify(m.name)}>
-                      <td>
-                        {m.rank && <span className="rank mono">{m.rank}</span>}
-                        {m.name}
-                      </td>
-                      <td className={m.second === 'No' ? 'dim' : ''}>{m.second}</td>
-                      <td className={m.debatable === 'No' ? 'dim' : ''}>{m.debatable}</td>
-                      <td className={m.amendable === 'No' ? 'dim' : ''}>{m.amendable}</td>
-                      <td className={m.vote.includes('Two-thirds') ? 'emph' : ''}>{m.vote}</td>
+              <div className="table-scroll">
+                <table className="cat-table motion-table">
+                  <thead>
+                    <tr>
+                      <th>Motion</th>
+                      <th>Second</th>
+                      <th>Debatable</th>
+                      <th>Amendable</th>
+                      <th>Vote</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {cls.motions.map((m) => (
+                      <tr key={m.name} id={slugify(m.name)}>
+                        <td>
+                          {m.rank && <span className="rank mono">{m.rank}</span>}
+                          {m.name}
+                        </td>
+                        <td className={m.second === 'No' ? 'dim' : ''}>{m.second}</td>
+                        <td className={m.debatable === 'No' ? 'dim' : ''}>{m.debatable}</td>
+                        <td className={m.amendable === 'No' ? 'dim' : ''}>{m.amendable}</td>
+                        <td className={m.vote.includes('Two-thirds') ? 'emph' : ''}>{m.vote}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </section>
           ))}
           <p className="footnote">{PRECEDENCE_FOOTNOTE}</p>

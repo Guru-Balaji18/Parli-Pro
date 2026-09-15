@@ -13,15 +13,15 @@ import BrandMark from './components/BrandMark'
 const PROFILE_KEY = 'ppa_profile'
 
 const NAV = [
-  { id: 'dashboard', num: 'I.', label: 'Dashboard' },
-  { id: 'practice', num: 'II.', label: 'Practice' },
-  { id: 'exam', num: 'III.', label: 'Mock Test' },
-  { id: 'review', num: 'IV.', label: 'Missed' },
-  { id: 'flagged', num: 'V.', label: 'Flagged' },
-  { id: 'team', num: 'VI.', label: 'Team' },
-  { id: 'vocab', num: 'VII.', label: 'Vocabulary' },
-  { id: 'reference', num: 'VIII.', label: 'Reference' },
-  { id: 'settings', num: 'IX.', label: 'Settings' },
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'practice', label: 'Practice' },
+  { id: 'exam', label: 'Mock Test' },
+  { id: 'review', label: 'Missed' },
+  { id: 'flagged', label: 'Flagged' },
+  { id: 'team', label: 'Team' },
+  { id: 'vocab', label: 'Vocabulary' },
+  { id: 'reference', label: 'Reference' },
+  { id: 'settings', label: 'Settings' },
 ]
 
 function App() {
@@ -76,7 +76,7 @@ function App() {
                 className={`agenda-item ${view === n.id ? 'active' : ''}`}
                 onClick={() => setView(n.id)}
               >
-                <span className="num">{n.num}</span> {n.label}
+                {n.label}
               </button>
             </li>
           ))}
