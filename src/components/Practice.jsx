@@ -398,7 +398,7 @@ export default function Practice({ mode, record, profile, onLookup }) {
                     <div className="er-correct">
                       Correct: <strong>{shownLetter(q, q.answer)}</strong> — {q.options[q.answer]}
                     </div>
-                    <Explanation id={q.id} />
+                    <Explanation id={q.id} letter={shownLetter(q, q.answer)} answerText={q.options[q.answer]} />
                   </>
                 )}
                 <div className="er-src">
@@ -539,7 +539,7 @@ export default function Practice({ mode, record, profile, onLookup }) {
               {isReview && (
                 <ReviewNote correct={answer === current.answer} daysBefore={review?.progress.get(current.id) ?? 0} />
               )}
-              <Explanation id={current.id} />
+              <Explanation id={current.id} letter={correctShown} answerText={current.options[current.answer]} />
               <div className="q-source">
                 {current.source}
                 {current.ronr_pages ? ` · cited to RONR p. ${current.ronr_pages}` : ''}
@@ -568,17 +568,27 @@ function ReviewNote({ correct, daysBefore }) {
   return <p className="review-note">{text}</p>
 }
 
-function Explanation({ id }) {
+function Explanation({ id, letter, answerText }) {
   const note = EXPLANATIONS[id]
   if (!note) return null
   return (
     <div className={`explanation ${note.conflict ? 'conflict' : ''}`}>
-      <div className="explanation-label">Why</div>
-      <p>{note.why}</p>
+      <div className="explanation-label">What the rulebook says</div>
+      {note.sources.map((s) => (
+        <div className="explanation-source" key={s.ref}>
+          <div className="explanation-cite">
+            In <cite>Robert’s Rules of Order Newly Revised</cite> (12th ed.), {s.section}, paragraph {s.ref}, it says (paraphrased):
+          </div>
+          <p>{s.says}</p>
+        </div>
+      ))}
+      {note.answer && <p className="explanation-link"><strong>So:</strong> {note.answer}</p>}
+      <p className="explanation-key">
+        Dunbar’s answer key: <strong>{letter}</strong>{answerText ? ` — ${answerText}` : ''}
+      </p>
       {note.conflict && (
         <p className="explanation-conflict"><strong>Heads up:</strong> {note.conflict}</p>
       )}
-      {note.cite && <div className="explanation-cite">{note.cite}</div>}
     </div>
   )
 }

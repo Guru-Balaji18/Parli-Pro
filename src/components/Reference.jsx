@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { MOTION_CLASSES, PRECEDENCE_FOOTNOTE, STUDY_TIERS } from '../data/motions'
 import { slugify } from '../lib/lookup'
+import MotionMatch from './MotionMatch'
 
 export default function Reference({ jumpTo }) {
   const [tab, setTab] = useState('chart')
@@ -25,8 +26,9 @@ export default function Reference({ jumpTo }) {
         <div className="eyebrow">Table of Rules</div>
         <h2>Reference</h2>
         <p>
-          The precedence chart is its own line item on the Round 1 test plan, and
-          the tier list orders your drilling by how often each topic actually shows up.
+          The precedence chart is its own line item on the Round 1 test plan, the tier
+          list orders your drilling by how often each topic shows up, and the match drill
+          tests the chart from memory.
         </p>
       </div>
 
@@ -34,12 +36,15 @@ export default function Reference({ jumpTo }) {
         <button className={tab === 'chart' ? 'on' : ''} onClick={() => setTab('chart')}>
           Motions chart
         </button>
+        <button className={tab === 'match' ? 'on' : ''} onClick={() => setTab('match')}>
+          Match drill
+        </button>
         <button className={tab === 'tiers' ? 'on' : ''} onClick={() => setTab('tiers')}>
           Study priority
         </button>
       </div>
 
-      {tab === 'chart' ? (
+      {tab === 'chart' && (
         <>
           {MOTION_CLASSES.map((cls) => (
             <section key={cls.id} className="motion-class">
@@ -76,7 +81,11 @@ export default function Reference({ jumpTo }) {
           ))}
           <p className="footnote">{PRECEDENCE_FOOTNOTE}</p>
         </>
-      ) : (
+      )}
+
+      {tab === 'match' && <MotionMatch />}
+
+      {tab === 'tiers' && (
         <div className="tier-list">
           {STUDY_TIERS.map((t) => (
             <section key={t.tier} className={`tier tier-${t.tier}`}>

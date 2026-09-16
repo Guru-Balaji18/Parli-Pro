@@ -21,7 +21,7 @@ export const MOTION_CLASSES = [
       { rank: null, name: 'Appeal', second: 'Yes', debatable: 'Usually', amendable: 'No', vote: 'Majority (tie sustains chair)' },
       { rank: null, name: 'Suspend the Rules', second: 'Yes', debatable: 'No', amendable: 'No', vote: 'Two-thirds' },
       { rank: null, name: 'Objection to the Consideration of a Question', second: 'No', debatable: 'No', amendable: 'No', vote: 'Two-thirds against' },
-      { rank: null, name: 'Division of the Assembly', second: 'No', debatable: 'No', amendable: 'No', vote: 'No vote \u2014 right of one member' },
+      { rank: null, name: 'Division of the Assembly', second: 'No', debatable: 'No', amendable: 'No', vote: 'No vote — right of one member' },
       { rank: null, name: 'Division of a Question', second: 'Yes', debatable: 'No', amendable: 'Yes', vote: 'Majority' },
       { rank: null, name: 'Parliamentary Inquiry', second: 'No', debatable: 'No', amendable: 'No', vote: 'No vote' },
       { rank: null, name: 'Request for Information', second: 'No', debatable: 'No', amendable: 'No', vote: 'No vote' },
@@ -37,7 +37,7 @@ export const MOTION_CLASSES = [
       { rank: 2, name: 'Previous Question', second: 'Yes', debatable: 'No', amendable: 'No', vote: 'Two-thirds' },
       { rank: 3, name: 'Limit or Extend Limits of Debate', second: 'Yes', debatable: 'No', amendable: 'Yes', vote: 'Two-thirds' },
       { rank: 4, name: 'Postpone to a Certain Time', second: 'Yes', debatable: 'Yes (limited)', amendable: 'Yes', vote: 'Majority' },
-      { rank: 5, name: 'Commit or Refer', second: 'Yes', debatable: 'Yes', amendable: 'Yes', vote: 'Majority' },
+      { rank: 5, name: 'Commit or Refer', second: 'Yes', debatable: 'Yes (limited)', amendable: 'Yes', vote: 'Majority' },
       { rank: 6, name: 'Amend', second: 'Yes', debatable: 'If motion is', amendable: 'Yes (once)', vote: 'Majority' },
       { rank: 7, name: 'Postpone Indefinitely', second: 'Yes', debatable: 'Yes', amendable: 'No', vote: 'Majority' },
     ],
@@ -59,7 +59,7 @@ export const MOTION_CLASSES = [
       { rank: null, name: 'Rescind (with notice)', second: 'Yes', debatable: 'Yes', amendable: 'Yes', vote: 'Majority' },
       { rank: null, name: 'Rescind (no notice)', second: 'Yes', debatable: 'Yes', amendable: 'Yes', vote: 'Two-thirds' },
       { rank: null, name: 'Take from the Table', second: 'Yes', debatable: 'No', amendable: 'No', vote: 'Majority' },
-      { rank: null, name: 'Discharge a Committee', second: 'Yes', debatable: 'Yes', amendable: 'Yes', vote: 'Majority w/ notice' },
+      { rank: null, name: 'Discharge a Committee', second: 'Yes', debatable: 'Yes', amendable: 'Yes', vote: 'Two-thirds, or majority w/ notice' },
     ],
   },
 ]
@@ -84,13 +84,13 @@ export const STUDY_TIERS = [
   {
     tier: 3,
     label: 'Consistently tested',
-    blurb: 'Most HOSA sample secret-topic motions live here \u2014 judges watch for these by name.',
+    blurb: 'Most HOSA sample secret-topic motions live here — judges watch for these by name.',
     topics: ['Bylaws', 'Postpone Indefinitely', 'Previous Question', 'Point of Order', 'Postpone Definitely', 'Nominations / Elections', 'Appeal', 'Quorum', 'Orders of the Day'],
   },
   {
     tier: 4,
     label: 'Separates top scorers',
-    blurb: 'Lower frequency, but each is one narrow rule \u2014 quick wins once Tiers 1\u20133 are solid.',
+    blurb: 'Lower frequency, but each is one narrow rule — quick wins once Tiers 1–3 are solid.',
     topics: ['Question of Privilege', 'Fix the Time to Which to Adjourn', 'Withdraw a Motion', 'Rescind / Amend Something Previously Adopted', 'Take from the Table', 'Parliamentary Inquiry', 'Lay on the Table', 'Suspend the Rules', 'Standing Rules', 'Division of the Assembly', 'Objection to Consideration', 'Division of a Question'],
   },
 ]

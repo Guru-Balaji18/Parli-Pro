@@ -47,7 +47,7 @@ export default function Settings({ profile, record, onLogout }) {
         <h3>Your account</h3>
         <p>
           Signed in as <strong>{profile.display_name}</strong>
-          {profile.role === 'captain' && <span className="captain-badge">captain</span>}
+          {profile.role !== 'member' && <span className="captain-badge">{profile.role}</span>}
           {' '}
           {s ? `${s.total.toLocaleString()} answers across ${s.unique.toLocaleString()} of ${questions.length.toLocaleString()} questions.` : 'No activity recorded yet.'}
         </p>

@@ -66,7 +66,7 @@ export default function Team({ profile }) {
     return () => { cancelled = true }
   }, [selected, range, weekStart])
 
-  const isCaptain = profile.role === 'captain'
+  const isCaptain = profile.role === 'captain' || profile.role === 'admin'
 
   if (error) return <Shell><div className="empty-state">{error}</div></Shell>
 

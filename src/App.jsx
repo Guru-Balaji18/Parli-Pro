@@ -3,11 +3,11 @@ import './App.css'
 import TeamAuth from './components/TeamAuth'
 import Dashboard from './components/Dashboard'
 import Practice from './components/Practice'
-import MotionDrill from './components/MotionDrill'
 import Vocab from './components/Vocab'
 import Reference from './components/Reference'
 import Team from './components/Team'
 import Settings from './components/Settings'
+import Admin from './components/Admin'
 import { useRecord } from './lib/useRecord'
 import BrandMark from './components/BrandMark'
 
@@ -17,7 +17,6 @@ const NAV = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'practice', label: 'Practice' },
   { id: 'exam', label: 'Mock Test' },
-  { id: 'drill', label: 'Motion Drill' },
   { id: 'review', label: 'Missed' },
   { id: 'flagged', label: 'Flagged' },
   { id: 'team', label: 'Team' },
@@ -46,6 +45,7 @@ function App() {
   function handleLogout() {
     localStorage.removeItem(PROFILE_KEY)
     setProfile(null)
+    setView('dashboard')
   }
 
   function handleLookup(type, anchor) {
@@ -57,6 +57,8 @@ function App() {
     return <TeamAuth onAuth={handleAuth} />
   }
 
+  const isAdmin = profile.role === 'admin'
+  const nav = isAdmin ? [...NAV, { id: 'admin', label: 'Admin' }] : NAV
   const drillModes = ['practice', 'exam', 'review', 'flagged']
 
   return (
@@ -68,11 +70,11 @@ function App() {
           <h1>Order of Business</h1>
           <div className="rail-user">
             {profile.display_name}
-            {profile.role === 'captain' && <span className="captain-badge">captain</span>}
+            {profile.role !== 'member' && <span className="captain-badge">{profile.role}</span>}
           </div>
         </div>
         <ul className="agenda">
-          {NAV.map((n) => (
+          {nav.map((n) => (
             <li key={n.id}>
               <button
                 className={`agenda-item ${view === n.id ? 'active' : ''}`}
@@ -93,11 +95,11 @@ function App() {
           {drillModes.includes(view) && (
             <Practice key={view} mode={view} record={record} profile={profile} onLookup={handleLookup} />
           )}
-          {view === 'drill' && <MotionDrill onLookup={handleLookup} />}
           {view === 'team' && <Team profile={profile} />}
           {view === 'vocab' && <Vocab jumpTo={view === 'vocab' ? jumpAnchor : null} />}
           {view === 'reference' && <Reference jumpTo={view === 'reference' ? jumpAnchor : null} />}
           {view === 'settings' && <Settings profile={profile} record={record} onLogout={handleLogout} />}
+          {view === 'admin' && isAdmin && <Admin profile={profile} />}
         </div>
       </main>
     </div>
