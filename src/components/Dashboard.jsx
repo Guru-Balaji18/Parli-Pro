@@ -6,8 +6,10 @@ import { CATEGORIES, CATEGORY_MAP } from '../data/categories'
 import questions from '../data/questions.json'
 import { currentStreak, dailyAccuracy, summarize } from '../lib/useRecord'
 import { reviewState } from '../lib/review'
+import CountUp from './CountUp'
 
 const TOTAL_Q = questions.length
+const TOOLTIP = { fontFamily: 'Nunito', fontWeight: 700, fontSize: 13, border: '2px solid #e1e5f7', borderRadius: 12 }
 
 export default function Dashboard({ record, goTo }) {
   const { attempts, flags, error } = record
@@ -21,7 +23,7 @@ export default function Dashboard({ record, goTo }) {
           <p>Answer your first question and your accuracy, timing and weak
           categories start building here.</p>
           <button className="next-btn" onClick={() => goTo('practice')}>
-            Start practising →
+            Start practicing →
           </button>
         </div>
       </Shell>
@@ -57,20 +59,20 @@ export default function Dashboard({ record, goTo }) {
   const chartData = catRows.slice().sort((a, b) => b.accuracy - a.accuracy)
   const weakest = catRows.slice().sort((a, b) => a.accuracy - b.accuracy)[0]
 
-  const barColor = (v) => (v >= 80 ? '#2d5a38' : v >= 60 ? '#8a6413' : '#8c2f2f')
+  const barColor = (v) => (v >= 80 ? '#22b573' : v >= 60 ? '#ffc83d' : '#ff5a5f')
 
   return (
     <Shell blurb="Your record, synced across every device.">
       <div className="stat-row">
-        <Stat value={`${s.accuracy}%`} label="Overall accuracy" />
-        <Stat value={`${s.avgTime.toFixed(1)}s`} label="Average time / question" />
-        <Stat value={s.total.toLocaleString()} label="Questions answered" />
-        <Stat value={`${s.unique.toLocaleString()} / ${TOTAL_Q.toLocaleString()}`} label="Bank covered" />
+        <Stat value={<CountUp to={s.accuracy} suffix="%" />} label="Overall accuracy" />
+        <Stat value={<CountUp to={s.avgTime} decimals={1} suffix="s" />} label="Average time / question" />
+        <Stat value={<CountUp to={s.total} />} label="Questions answered" />
+        <Stat value={<><CountUp to={s.unique} /><span className="stat-of"> / {TOTAL_Q.toLocaleString()}</span></>} label="Bank covered" />
       </div>
 
       <div className="callout-row">
         <div className="callout">
-          <div className="callout-num mono">{streak}</div>
+          <div className="callout-num mono"><CountUp to={streak} /></div>
           <div>day{streak === 1 ? '' : 's'} in a row</div>
         </div>
         <button className="callout clickable" onClick={() => goTo('review')}>
@@ -96,14 +98,14 @@ export default function Dashboard({ record, goTo }) {
           <div className="chart-wrap">
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={trend} margin={{ left: 0, right: 16, top: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(27,26,23,0.1)" />
-                <XAxis dataKey="day" stroke="rgba(27,26,23,0.5)" fontSize={12} />
-                <YAxis domain={[0, 100]} tickFormatter={(v) => `${v}%`} stroke="rgba(27,26,23,0.5)" fontSize={12} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e1e5f7" />
+                <XAxis dataKey="day" stroke="#62678a" fontSize={12} />
+                <YAxis domain={[0, 100]} tickFormatter={(v) => `${v}%`} stroke="#62678a" fontSize={12} />
                 <Tooltip
                   formatter={(v, n, p) => [`${v}% (${p.payload.count} questions)`, 'Accuracy']}
-                  contentStyle={{ fontFamily: 'IBM Plex Sans', fontSize: 13, border: '1px solid rgba(27,26,23,0.2)' }}
+                  contentStyle={TOOLTIP}
                 />
-                <Line type="monotone" dataKey="accuracy" stroke="#1a2a3a" strokeWidth={2} dot={{ r: 3, fill: '#8a6413' }} />
+                <Line type="monotone" dataKey="accuracy" stroke="#8b5cf6" strokeWidth={4} dot={{ r: 5, fill: '#ff4f8b', stroke: '#fff', strokeWidth: 2 }} activeDot={{ r: 8 }} animationDuration={900} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -114,11 +116,11 @@ export default function Dashboard({ record, goTo }) {
       <div className="chart-wrap">
         <ResponsiveContainer width="100%" height={Math.max(240, chartData.length * 34)}>
           <BarChart data={chartData} layout="vertical" margin={{ left: 12, right: 24 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(27,26,23,0.1)" horizontal={false} />
-            <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} stroke="rgba(27,26,23,0.5)" fontSize={12} />
-            <YAxis type="category" dataKey="name" width={150} stroke="rgba(27,26,23,0.5)" fontSize={12} />
-            <Tooltip formatter={(v) => `${v}%`} contentStyle={{ fontFamily: 'IBM Plex Sans', fontSize: 13, border: '1px solid rgba(27,26,23,0.2)' }} />
-            <Bar dataKey="accuracy" radius={[0, 3, 3, 0]}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e1e5f7" horizontal={false} />
+            <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} stroke="#62678a" fontSize={12} />
+            <YAxis type="category" dataKey="name" width={150} stroke="#62678a" fontSize={12} />
+            <Tooltip formatter={(v) => `${v}%`} contentStyle={TOOLTIP} />
+            <Bar dataKey="accuracy" radius={[0, 10, 10, 0]} animationDuration={900}>
               {chartData.map((e, i) => <Cell key={i} fill={barColor(e.accuracy)} />)}
             </Bar>
           </BarChart>
@@ -126,25 +128,27 @@ export default function Dashboard({ record, goTo }) {
       </div>
 
       <h3 className="section-title">By category, weakest first</h3>
-      <table className="cat-table">
-        <thead>
-          <tr><th>Category</th><th>Answered</th><th>Accuracy</th><th>Avg time</th></tr>
-        </thead>
-        <tbody>
-          {catRows.slice().sort((a, b) => a.accuracy - b.accuracy).map((r) => (
-            <tr key={r.id}>
-              <td>{r.fullName}</td>
-              <td className="mono">{r.count}</td>
-              <td className="mono">
-                <span className={r.accuracy >= 80 ? 'pill good' : r.accuracy >= 60 ? 'pill mid' : 'pill low'}>
-                  {r.accuracy}%
-                </span>
-              </td>
-              <td className="mono">{r.avgTime.toFixed(1)}s</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="table-scroll">
+        <table className="cat-table">
+          <thead>
+            <tr><th>Category</th><th>Answered</th><th>Accuracy</th><th>Avg time</th></tr>
+          </thead>
+          <tbody>
+            {catRows.slice().sort((a, b) => a.accuracy - b.accuracy).map((r) => (
+              <tr key={r.id}>
+                <td>{r.fullName}</td>
+                <td className="mono">{r.count}</td>
+                <td className="mono">
+                  <span className={r.accuracy >= 80 ? 'pill good' : r.accuracy >= 60 ? 'pill mid' : 'pill low'}>
+                    {r.accuracy}%
+                  </span>
+                </td>
+                <td className="mono">{r.avgTime.toFixed(1)}s</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       <h3 className="section-title">Recent activity</h3>
       <ul className="recent-list">

@@ -4,54 +4,21 @@ import { REVIEW_CLEAR_DAYS, reviewState } from '../lib/review'
 import { CATEGORIES } from '../data/categories'
 import { findLookup } from '../lib/lookup'
 import questions from '../data/questions.json'
+import { layoutOptions, shuffle } from '../lib/quiz'
+import Explanation from './Explanation'
+import Icon from './Icons'
+import { bigCelebration, popFrom } from '../lib/celebrate'
 
-function shuffle(arr) {
-  const a = arr.slice()
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[a[i], a[j]] = [a[j], a[i]]
-  }
-  return a
-}
-
-const LETTERS = ['A', 'B', 'C', 'D']
 const EXAM_COUNT = 50
 const EXAM_SECONDS = 60 * 60
 const THREE_CHOICE_KEY = 'ppa_three_choice'
-const NO_SESSION = { count: 0, correct: 0, totalTime: 0 }
-
-// Hiding a choice and re-lettering the rest breaks answers like "All of the
-// above" or "Both A and C", so questions with those always keep all four.
-const REFERS_TO_WORDS = /\b(above|below|both|neither|all of these|none of these)\b/i
-const REFERS_TO_LETTERS = /\b[A-D]\b\s*(,|and|or|&)\s*(and\s+|or\s+)?\b[A-D]\b|\banswers? [A-D]\b/
+const NO_SESSION = { count: 0, correct: 0, totalTime: 0, streak: 0 }
+const STREAK_MILESTONES = [5, 10, 15, 20, 30, 50]
 
 function fmtClock(s) {
   const m = Math.floor(Math.abs(s) / 60)
   const sec = Math.floor(Math.abs(s) % 60)
   return `${s < 0 ? '-' : ''}${m}:${String(sec).padStart(2, '0')}`
-}
-
-function hash(str) {
-  let h = 2166136261
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i)
-    h = Math.imul(h, 16777619)
-  }
-  return h >>> 0
-}
-
-// `shown` is the on-screen letter, `orig` the bank's own letter. In three-choice
-// mode one wrong answer is hidden — the same one for the rest of the session.
-function layoutOptions(q, threeChoice, seed) {
-  let letters = LETTERS.filter((l) => q.options[l])
-  const canHide = letters.length === 4 &&
-    !letters.some((l) => REFERS_TO_WORDS.test(q.options[l]) || REFERS_TO_LETTERS.test(q.options[l]))
-  if (threeChoice && canHide) {
-    const wrong = letters.filter((l) => l !== q.answer)
-    const hidden = wrong[hash(`${seed}:${q.id}`) % wrong.length]
-    letters = letters.filter((l) => l !== hidden)
-  }
-  return letters.map((orig, i) => ({ shown: LETTERS[i], orig, text: q.options[orig] }))
 }
 
 export default function Practice({ mode, record, profile, onLookup }) {
@@ -193,11 +160,17 @@ export default function Practice({ mode, record, profile, onLookup }) {
     if (revealed) return
     setAnswer(letter)
     setRevealed(true)
+    const streak = correct ? session.streak + 1 : 0
     setSession((s) => ({
       count: s.count + 1,
       correct: s.correct + (correct ? 1 : 0),
       totalTime: s.totalTime + seconds,
+      streak,
     }))
+    if (correct) {
+      if (STREAK_MILESTONES.includes(streak)) bigCelebration()
+      else popFrom(document.querySelector(`[data-orig="${letter}"]`))
+    }
     logAttempt(current, letter, seconds, correct)
   }
 
@@ -265,6 +238,8 @@ export default function Practice({ mode, record, profile, onLookup }) {
 
   function finishExam() {
     setExamState('done')
+    const scored = queue.filter((q) => examAnswers[q.id]?.letter === q.answer).length
+    if (queue.length && scored / queue.length >= 0.7) setTimeout(bigCelebration, 350)
     const duration = (performance.now() - examStartRef.current) / 1000
     let correct = 0
     for (const q of queue) {
@@ -461,6 +436,9 @@ export default function Practice({ mode, record, profile, onLookup }) {
           <div><span className="mono">{session.count}</span> answered</div>
           <div><span className="mono">{sessionAccuracy}%</span> accuracy</div>
           <div><span className="mono">{sessionAvgTime.toFixed(1)}s</span> avg</div>
+          {session.streak >= 2 && (
+            <div className="streak-chip" key={session.streak}><span className="mono">{session.streak}</span> streak</div>
+          )}
         </div>
       )}
 
@@ -509,9 +487,9 @@ export default function Practice({ mode, record, profile, onLookup }) {
                 else if (orig === answer) cls += ' incorrect'
               } else if (orig === answer) cls += ' selected'
               return (
-                <button key={orig} className={cls} onClick={() => pick(orig)} disabled={revealed}>
+                <button key={orig} data-orig={orig} className={cls} onClick={() => pick(orig)} disabled={revealed}>
                   <span className="q-letter">{shown}</span>
-                  <span>{text}</span>
+                  <span className="q-option-text">{text}</span>
                 </button>
               )
             })}
@@ -533,7 +511,10 @@ export default function Practice({ mode, record, profile, onLookup }) {
           {revealed && (
             <div className="q-feedback">
               <div className={answer === current.answer ? 'verdict correct' : 'verdict incorrect'}>
-                {answer === current.answer ? 'Correct' : `Incorrect — answer is ${correctShown}`}
+                <span className="verdict-icon"><Icon name={answer === current.answer ? 'check' : 'x'} strokeWidth={3} /></span>
+                {answer === current.answer
+                  ? session.streak >= 3 ? `Correct! ${session.streak} in a row` : 'Correct!'
+                  : `Not quite. The answer is ${correctShown}`}
               </div>
               {isReview && (
                 <ReviewNote correct={answer === current.answer} daysBefore={review?.progress.get(current.id) ?? 0} />
@@ -565,67 +546,6 @@ function ReviewNote({ correct, daysBefore }) {
   else if (daysBefore + 1 >= REVIEW_CLEAR_DAYS) text = `That's ${REVIEW_CLEAR_DAYS} different days, so this one leaves your Missed list.`
   else text = `Right on ${daysBefore + 1} of ${REVIEW_CLEAR_DAYS} days. It comes back tomorrow; get it right again to clear it.`
   return <p className="review-note">{text}</p>
-}
-
-// The explanations file is large, so it loads on first use instead of with the app.
-let explanationsCache = null
-let explanationsPromise = null
-function loadExplanations() {
-  if (!explanationsPromise) {
-    explanationsPromise = import('../data/explanations.json').then((m) => {
-      explanationsCache = m.default
-      return explanationsCache
-    })
-  }
-  return explanationsPromise
-}
-
-function useExplanation(id) {
-  const [all, setAll] = useState(explanationsCache)
-  useEffect(() => {
-    if (all) return
-    let live = true
-    loadExplanations().then((data) => { if (live) setAll(data) }).catch(() => {})
-    return () => { live = false }
-  }, [all])
-  return all ? all[id] : null
-}
-
-// Where a source sits in the book: a numbered paragraph ("46:6"), a footnote
-// ("3:16n3"), a row of Table II ("T2-28"), one of the tinted-page lists ("L-V"),
-// or the unnumbered Introduction.
-function citation(s) {
-  if (s.ref === 'Intro') return 'the Introduction'
-  if (s.ref.startsWith('T2-')) return `Table II (Table of Rules Relating to Motions), entry ${s.ref.slice(3)}`
-  if (s.ref.startsWith('L-')) return s.section
-  const fn = s.ref.match(/^(\d+:\d+)n(\d+)$/)
-  if (fn) return `${s.section}, footnote ${fn[2]} to paragraph ${fn[1]}`
-  return `${s.section}, paragraph ${s.ref}`
-}
-
-function Explanation({ id, letter, answerText }) {
-  const note = useExplanation(id)
-  if (!note) return null
-  return (
-    <div className={`explanation ${note.conflict ? 'conflict' : ''}`}>
-      <div className="explanation-label">What the rulebook says</div>
-      {note.sources.map((s) => (
-        <div className="explanation-source" key={s.ref}>
-          <div className="explanation-cite">
-            In <cite>Robert’s Rules of Order Newly Revised</cite> (12th ed.), {citation(s)}, it says (paraphrased):
-          </div>
-          <p>{s.says}</p>
-        </div>
-      ))}
-      {note.answer && <p className="explanation-link"><strong>So:</strong> {note.answer}</p>}
-      <p className="explanation-key">
-        Dunbar’s answer key: <strong>{letter}</strong>{answerText ? ` — ${answerText}` : ''}
-      </p>
-      {note.conflict && (
-        <p className="explanation-conflict"><strong>Heads up:</strong> {note.conflict}</p>
-      )}
-    </div>
-  )
 }
 
 function ThreeChoiceToggle({ on, onToggle }) {

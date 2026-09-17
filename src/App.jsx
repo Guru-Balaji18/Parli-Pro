@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import { AnimatePresence, MotionConfig, motion } from 'motion/react'
 import './App.css'
 import TeamAuth from './components/TeamAuth'
 import Dashboard from './components/Dashboard'
 import Practice from './components/Practice'
+import Duel from './components/Duel'
 import Vocab from './components/Vocab'
 import Reference from './components/Reference'
 import Team from './components/Team'
@@ -10,20 +12,24 @@ import Settings from './components/Settings'
 import Admin from './components/Admin'
 import { useRecord } from './lib/useRecord'
 import BrandMark from './components/BrandMark'
+import Icon from './components/Icons'
 
 const PROFILE_KEY = 'ppa_profile'
 
+// Each section has its own color, used for its nav tile and page banner.
 const NAV = [
-  { id: 'dashboard', label: 'Dashboard' },
-  { id: 'practice', label: 'Practice' },
-  { id: 'exam', label: 'Mock Test' },
-  { id: 'review', label: 'Missed' },
-  { id: 'flagged', label: 'Flagged' },
-  { id: 'team', label: 'Team' },
-  { id: 'vocab', label: 'Vocabulary' },
-  { id: 'reference', label: 'Reference' },
-  { id: 'settings', label: 'Settings' },
+  { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', color: 'blue' },
+  { id: 'practice', label: 'Practice', icon: 'practice', color: 'violet' },
+  { id: 'duel', label: '1v1 Battle', icon: 'duel', color: 'pink' },
+  { id: 'exam', label: 'Mock Test', icon: 'exam', color: 'orange' },
+  { id: 'review', label: 'Missed', icon: 'review', color: 'red' },
+  { id: 'flagged', label: 'Flagged', icon: 'flagged', color: 'yellow' },
+  { id: 'team', label: 'Team', icon: 'team', color: 'teal' },
+  { id: 'vocab', label: 'Vocabulary', icon: 'vocab', color: 'green' },
+  { id: 'reference', label: 'Reference', icon: 'reference', color: 'blue' },
+  { id: 'settings', label: 'Settings', icon: 'settings', color: 'violet' },
 ]
+const ADMIN_NAV = { id: 'admin', label: 'Admin', icon: 'admin', color: 'red' }
 
 function App() {
   const [profile, setProfile] = useState(() => {
@@ -54,55 +60,87 @@ function App() {
   }
 
   if (!profile) {
-    return <TeamAuth onAuth={handleAuth} />
+    return (
+      <MotionConfig reducedMotion="user">
+        <TeamAuth onAuth={handleAuth} />
+      </MotionConfig>
+    )
   }
 
   const isAdmin = profile.role === 'admin'
-  const nav = isAdmin ? [...NAV, { id: 'admin', label: 'Admin' }] : NAV
+  const nav = isAdmin ? [...NAV, ADMIN_NAV] : NAV
   const drillModes = ['practice', 'exam', 'review', 'flagged']
+  const color = nav.find((n) => n.id === view)?.color || 'blue'
 
   return (
-    <div className="shell">
-      <nav className="rail">
-        <div className="rail-brand">
-          <BrandMark className="brand-mark" />
-          <div className="kicker">HOSA Parliamentary Procedure</div>
-          <h1>Order of Business</h1>
-          <div className="rail-user">
-            {profile.display_name}
-            {profile.role !== 'member' && <span className="captain-badge">{profile.role}</span>}
+    <MotionConfig reducedMotion="user">
+      <div className="shell">
+        <nav className="rail">
+          <div className="rail-brand">
+            <BrandMark className="brand-mark" />
+            <div>
+              <h1>Parli Pro</h1>
+              <div className="kicker">HOSA study squad</div>
+            </div>
           </div>
-        </div>
-        <ul className="agenda">
-          {nav.map((n) => (
-            <li key={n.id}>
-              <button
-                className={`agenda-item ${view === n.id ? 'active' : ''}`}
-                onClick={() => setView(n.id)}
-              >
-                {n.label}
-              </button>
-            </li>
-          ))}
-        </ul>
-        <div className="rail-foot">
-          <button onClick={handleLogout}>Log out</button>
-        </div>
-      </nav>
-      <main className="stage">
-        <div className="page-panel">
-          {view === 'dashboard' && <Dashboard record={record} goTo={setView} />}
-          {drillModes.includes(view) && (
-            <Practice key={view} mode={view} record={record} profile={profile} onLookup={handleLookup} />
-          )}
-          {view === 'team' && <Team profile={profile} />}
-          {view === 'vocab' && <Vocab jumpTo={view === 'vocab' ? jumpAnchor : null} />}
-          {view === 'reference' && <Reference jumpTo={view === 'reference' ? jumpAnchor : null} />}
-          {view === 'settings' && <Settings profile={profile} record={record} onLogout={handleLogout} />}
-          {view === 'admin' && isAdmin && <Admin profile={profile} />}
-        </div>
-      </main>
-    </div>
+          <ul className="agenda">
+            {nav.map((n) => (
+              <li key={n.id}>
+                <button
+                  className={`agenda-item tone-${n.color} ${view === n.id ? 'active' : ''}`}
+                  onClick={() => setView(n.id)}
+                  aria-current={view === n.id ? 'page' : undefined}
+                >
+                  {view === n.id && (
+                    <motion.span
+                      className="agenda-active"
+                      layoutId="agenda-active"
+                      transition={{ type: 'spring', stiffness: 500, damping: 38 }}
+                    />
+                  )}
+                  <span className="agenda-icon"><Icon name={n.icon} /></span>
+                  <span className="agenda-label">{n.label}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <div className="rail-foot">
+            <div className="rail-user">
+              <span className="avatar">{profile.display_name.slice(0, 1).toUpperCase()}</span>
+              <span className="rail-user-name">{profile.display_name}</span>
+              {profile.role !== 'member' && <span className="captain-badge">{profile.role}</span>}
+            </div>
+            <button className="logout-btn" onClick={handleLogout} title="Log out">
+              <Icon name="logout" />
+              <span>Log out</span>
+            </button>
+          </div>
+        </nav>
+        <main className={`stage tone-${color}`}>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={view}
+              className="page-panel"
+              initial={{ opacity: 0, y: 18, scale: 0.99 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.28, ease: [0.2, 0.8, 0.2, 1] }}
+            >
+              {view === 'dashboard' && <Dashboard record={record} goTo={setView} />}
+              {drillModes.includes(view) && (
+                <Practice mode={view} record={record} profile={profile} onLookup={handleLookup} />
+              )}
+              {view === 'duel' && <Duel profile={profile} record={record} />}
+              {view === 'team' && <Team profile={profile} />}
+              {view === 'vocab' && <Vocab jumpTo={jumpAnchor} />}
+              {view === 'reference' && <Reference jumpTo={jumpAnchor} />}
+              {view === 'settings' && <Settings profile={profile} record={record} onLogout={handleLogout} />}
+              {view === 'admin' && isAdmin && <Admin profile={profile} />}
+            </motion.div>
+          </AnimatePresence>
+        </main>
+      </div>
+    </MotionConfig>
   )
 }
 

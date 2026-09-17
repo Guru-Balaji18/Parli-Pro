@@ -158,13 +158,13 @@ export default function Team({ profile }) {
             <div className="chart-wrap">
               <ResponsiveContainer width="100%" height={Math.max(180, detail.length * 34)}>
                 <BarChart data={detail} layout="vertical" margin={{ left: 12, right: 24 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(27,26,23,0.1)" horizontal={false} />
-                  <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} stroke="rgba(27,26,23,0.5)" fontSize={12} />
-                  <YAxis type="category" dataKey="name" width={150} stroke="rgba(27,26,23,0.5)" fontSize={12} />
-                  <Tooltip formatter={(v) => `${v}%`} contentStyle={{ fontFamily: 'IBM Plex Sans', fontSize: 13 }} />
-                  <Bar dataKey="accuracy" radius={[0, 3, 3, 0]}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e1e5f7" horizontal={false} />
+                  <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} stroke="#62678a" fontSize={12} />
+                  <YAxis type="category" dataKey="name" width={150} stroke="#62678a" fontSize={12} />
+                  <Tooltip formatter={(v) => `${v}%`} contentStyle={{ fontFamily: 'Nunito', fontWeight: 700, fontSize: 13, border: '2px solid #e1e5f7', borderRadius: 12 }} />
+                  <Bar dataKey="accuracy" radius={[0, 10, 10, 0]}>
                     {detail.map((e, i) => (
-                      <Cell key={i} fill={e.accuracy >= 80 ? '#2d5a38' : e.accuracy >= 60 ? '#8a6413' : '#8c2f2f'} />
+                      <Cell key={i} fill={e.accuracy >= 80 ? '#22b573' : e.accuracy >= 60 ? '#ffc83d' : '#ff5a5f'} />
                     ))}
                   </Bar>
                 </BarChart>

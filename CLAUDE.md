@@ -27,7 +27,7 @@ The publishable key is already hardcoded in `src/lib/supabase.js` — it's safe 
 ### Tables
 
 * `profiles` — `id` (uuid pk), `display_name` (unique), `pin_hash`, `role` (`'member'` | `'captain'`), `created_at`. One row per team member.
-* `attempts` — every practice/exam answer: `question_id`, `category_id`, `selected_answer`, `is_correct`, `time_seconds`, `mode` (`practice`/`exam`/`review`/`flagged`), `answered_at`, `user_id` (fk → profiles).
+* `attempts` — every practice/exam answer: `question_id`, `category_id`, `selected_answer`, `is_correct`, `time_seconds`, `mode` (`practice`/`exam`/`review`/`flagged`/`duel`), `answered_at`, `user_id` (fk → profiles).
 * `flags` — `question_id`, `user_id`: questions a user starred to revisit.
 * `exam_sessions` — one row per completed mock test: `question_count`, `correct_count`, `duration_seconds`, `user_id`.
 
@@ -40,6 +40,14 @@ The publishable key is already hardcoded in `src/lib/supabase.js` — it's safe 
 ### View
 
 * `team_leaderboard` — same aggregation as above but all-time (no `since` filter). Views in Postgres run with the owner's privileges by default, which is how this bypasses RLS to aggregate across every user's attempts without needing real per-request auth.
+
+### 1v1 duels (2026-09-17)
+
+* `duels` — one row per match: 4-character `code` (unique among lobby/active matches), `host_id`/`host_name`, `guest_id`/`guest_name`, `status` (`lobby`/`active`/`finished`/`abandoned`), `question_ids`, `hidden` (the wrong letter hidden per question in 3-choice mode, `''` otherwise, same for both players), `current_index`, `question_started_at`, `seconds_per_question` (30), `host_answered`/`guest_answered` (last index answered), running `*_score` and `*_time_ms`, `winner_id` (null = draw), `forfeit`. Clients can SELECT it (it's in the `supabase_realtime` publication) but can't write it.
+* `duel_keys` (answer key + category per question) and `duel_answers` (each pick, correctness, time) have no client grants at all.
+* Functions (security definer, identify the player by profile id like the rest of the app): `duel_create`, `duel_join` (starts the match 4s later), `duel_answer` (server times the answer, grades it, logs an `attempts` row with mode `duel` only when both players have accounts, and closes the question once both have answered), `duel_advance` (closes a question when both answered or its time plus 1s grace is up; idempotent, called by clients on timeout), `duel_reveal` (both picks + key, only for closed questions), `duel_leave` (cancel lobby / forfeit), `duel_record` (wins/losses/draws), `server_now` (clock sync).
+* Scores are tallied only when a question closes, and picks stay hidden until then, so neither player can see the other's answer early. The next question starts 3.5s after a close, which is the reveal window. Winner: most correct, then lower total time (an unanswered question counts the full 30s), else a draw.
+* Tested with a full scripted match in a rolled-back transaction, and live in the browser against a placeholder opponent with no account (those two test rows, codes `TST1` and `6RG8`, have a null `guest_id` and are ignored by `duel_record`).
 
 ### Security model — read this before "fixing" it
 
@@ -66,16 +74,20 @@ parlipro-app/
 ├── src/
 │   ├── App.jsx              — shell, nav, view routing (no router lib — plain useState)
 │   ├── index.css            — design tokens (colors, fonts)
-│   ├── App.css              — all component styles (~1300 lines, grew via iterative edits)
+│   ├── App.css              — all component styles, rewritten for the 2026-09-17 redesign
 │   ├── components/
 │   │   ├── TeamAuth.jsx     — login/signup (replaces old Login.jsx, now deleted)
 │   │   ├── Dashboard.jsx    — personal stats, charts, streak
 │   │   ├── Practice.jsx     — the core quiz engine: practice/exam/review/flagged modes all live here
+│   │   ├── Duel.jsx         — 1v1 Battle: home (create/join), lobby, live match, results
+│   │   ├── Explanation.jsx  — lazy-loaded RONR explanation block, shared by Practice and Duel
+│   │   ├── CountUp.jsx      — animated number for dashboard stats
+│   │   ├── Icons.jsx        — rounded line icon set (nav + UI)
 │   │   ├── Team.jsx         — leaderboard (This Week / All-Time), captain drill-down
 │   │   ├── Vocab.jsx        — browse + flashcard modes over vocab.js
 │   │   ├── Reference.jsx    — motions chart + study tiers, anchor-linkable
 │   │   ├── Settings.jsx     — account info, calibration notes, CSV export, clear history
-│   │   └── BrandMark.jsx    — inline SVG seal/ribbon icon
+│   │   └── BrandMark.jsx    — inline SVG gavel logo tile
 │   ├── data/
 │   │   ├── questions.json   — the 1,610-question bank (minified, ~726KB)
 │   │   ├── categories.js    — 12 HOSA-topic category definitions
@@ -83,6 +95,9 @@ parlipro-app/
 │   │   └── motions.js       — precedence chart data + 4-tier study priority list
 │   └── lib/
 │       ├── supabase.js      — client init
+│       ├── quiz.js          — shuffle, 3-choice option layout (shared by Practice and Duel)
+│       ├── duel.js          — duel question picking, server clock offset hook, error text
+│       ├── celebrate.js     — canvas-confetti bursts (skipped under reduced motion)
 │       ├── useRecord.js     — hook: loads current user's attempts+flags, plus stat helpers
 │       ├── lookup.js        — matches a question's text to a Reference motion or Vocab term (for the "Read more" cross-link)
 │       └── challengeWeek.js — Friday 00:00 America/New_York week boundaries, identical on every device regardless of its time zone; DST-safe (weeks spanning a change are 167h/169h)
@@ -121,23 +136,15 @@ Dunbar's Manual carries an explicit all-rights-reserved notice covering electron
 
 Still applies regardless: keep the **GitHub repo private**, and don't add more copyrighted question material from unauthorized re-uploads (Quizlet, Docsity, Stuvia).
 
-## 6. Design system — "Open Ledger" concept
+## 6. Design system — "bright & friendly" (2026-09-17)
 
-Deliberately not a generic SaaS dashboard, since the subject (parliamentary procedure) is literally about procedural documents. Two design passes happened:
+The earlier formal "Open Ledger" look (navy cover, parchment page, EB Garamond, brass) was replaced at the user's request with a full redesign that is bold, playful and fun to use, in the Duolingo/Kahoot spirit.
 
-Pass 1 (cream background, Fraunces display serif, brass accent, IBM Plex Mono for small labels) — later self-identified as accidentally close to several generic "AI-generated design" patterns (near-identical cream background to the most common default, monospace+uppercase used for plain text labels, middle-dot-joined brand strings).
-
-Pass 2 (current) — structural fix, not just recoloring:
-
-* Whole app sits on a dark navy "cover" canvas (`--cover: #10161d`); each page renders as a lit parchment "page" panel (`--page: #efe6cd`) with a layered shadow — like opening a bound manual, not a flat SPA background.
-* Display font swapped Fraunces → EB Garamond (queried via the `ui-ux-pro-max-skill` open-source design-data tool — its curated pairing for "legal/government/formal documents," more period-appropriate than a trendy indie display serif).
-* Textual labels that were mono+uppercase (category tags, table headers, status chips) converted to italic-serif "ledger-index" style (`.label-index` utility class) — reads like an old book's index, not a dashboard.
-* Dot/dash-joined brand strings removed throughout.
-* Added a hand-drawn inline SVG brand mark (`BrandMark.jsx` — a simple seal-and-ribbon), not an icon-font glyph.
-
-On the Mobbin request: the user asked to use the Mobbin connector for design inspiration; it requires a paid plan not available in this session. Used `ui-ux-pro-max-skill` (github.com/nextlevelbuilder/ui-ux-pro-max-skill, 127k-star MIT-licensed open source project) instead — cloned it locally and queried its color/typography/UX datasets directly via its Python search script. Its generic "education" category match wanted purple bubbly Claymorphism aimed at kids' apps — wrong tone, was rejected in favor of more specific "legal/formal document" and "test prep" queries.
-
-⚠️ **UNRESOLVED AT HANDOFF:** the user says the site "still looks ugly" after this second pass, with no specifics given yet. Both design passes were done by code review only, not visual verification — actually look at the rendered output (browser or `npm run dev`) before making further visual changes blind.
+* Tokens live in `index.css`: light lavender canvas, white rounded cards, eight bright colors each with a `-ledge` shade (the 3D bottom edge on buttons and cards), a `-tint`, and `-ink` text shades where needed for contrast. Fonts are Fredoka (display, numbers) and Nunito (body).
+* Every nav section has a tone (`NAV` in `App.jsx`); `.tone-*` classes set `--tone`, `--tone-deep`, `--tone-deeper`, `--tone-on`. Page banners and primary buttons use the deep shades so white text stays at WCAG AA; yellow uses dark ink instead. Contrast ratios were checked when the palette was set.
+* Motion: `motion` (Framer Motion) for page transitions, the sliding nav highlight, the 1v1 countdown, score pops and card transitions; CSS keyframes for card entrances, correct-answer bounce, wrong-answer shake, and floating banner shapes; `canvas-confetti` for correct answers, streak milestones (5/10/15…), mock tests at 70%+, and 1v1 wins. `MotionConfig reducedMotion="user"` plus a CSS media query honor reduced-motion settings.
+* On phones (≤860px) the sidebar becomes a horizontally scrolling icon bar.
+* Browser-pane screenshots of scrolled pages come back stale; check lower sections with a tall emulated viewport or DOM queries instead.
 
 ## 7. Feature list (for context on what's already built)
 
@@ -149,13 +156,14 @@ On the Mobbin request: the user asked to use the Mobbin connector for design ins
 * Match drill (Reference → Match drill; `lib/motionMatch.js`, `components/MotionMatch.jsx`): 10 rounds. Each round picks one column of the motions chart (second / debatable / amendable / vote) and five motions whose answers differ; you tap a motion, then its answer. Tiles spell out the chart's shorthand. It drills `data/motions.js` directly, so that chart must stay accurate — its values were checked against each motion's Standard Descriptive Characteristics in RONR 12th ed. on 2026-09-16 (fixes: Commit's debate is limited; Discharge a Committee needs two-thirds or a majority with notice). Local score only. (An earlier "Motion Drill" nav tab on precedence was removed at the user's request.)
 * Answer explanations (`data/explanations.json`, lazy-loaded by `Explanation` in `Practice.jsx` so the ~550 KB file stays out of the main bundle): every one of the 1,610 questions has one, shown after answering (and on missed mock-test questions). Each source names where it is in RONR 12th ed. and says what that passage says in a close, clearly labeled paraphrase. It is deliberately not quoted, because the book is under copyright and the site is publicly reachable. `ref` is a paragraph (`46:6`), a footnote (`3:16n3`), a Table II row (`T2-28`), a tinted-page list (`L-V`), or `Intro`; `citation()` turns it into readable text, and `section` holds the section or table title. The PDF has no printed page numbers, so never cite pages. `answer` is the "So:" line and must not mention option letters, since 3-choice mode relabels them. The component adds Dunbar's key letter itself. `conflict` flags the 22 questions where Dunbar's key is shaky or wrong under the 12th ed. The file was generated by a one-off pipeline (RONR text index, retrieval, hand-written batches, validation) kept outside the repo. Edit the JSON directly for fixes.
 * Admin (`components/Admin.jsx`; nav item shown only to role `admin`; `guru` is the admin): member stats, each member's full answer history / mock tests / flags, and removing members. All of it goes through `admin_members`, `admin_member_history` and `admin_remove_member` — security-definer functions that re-verify the admin's name + PIN through `admin_check`, which clients can't call. The PIN lives in component state only (re-entered each visit). Removal explicitly deletes the member's attempts, flags and exam sessions (their FKs are ON DELETE SET NULL) and refuses to remove yourself or another admin. The client-side role check only hides the nav item; the database is the real gate.
+* 1v1 Battle (`components/Duel.jsx`, schema in §2): live head-to-head matches joined by a 4-character room code. The creator picks the number of questions (5–30 chips or 3–50 custom), categories, and 3-choice mode; each question has a 30-second server-timed clock. Live scoreboard, opponent "locked in" indicator, a reveal of both picks after each question, a results screen with a per-question review and explanations, and a win/loss/draw tally. Updates come over Supabase Realtime with a 3-second polling fallback, and the active match id is kept in sessionStorage so a refresh rejoins it. Quitting mid-match forfeits.
 * Flagged Questions: manual star/flag, `F` keyboard shortcut
 * Vocabulary: 79 terms, browse (search + filter) and flashcard modes
 * Reference: full motions precedence chart (privileged/incidental/subsidiary/main/bring-back classes) + 4-tier study priority list from a frequency analysis of the original Dunbar files
 * Team tab: leaderboard with This Week / All-Time toggle. "This Week" resets Friday 12:00 AM US Eastern Time for every viewer regardless of device time zone, DST-aware (see `challengeWeek.js`; no automated tests are checked in — it was verified by hand across both 2026 DST transitions and six device time zones). Everyone sees name + accuracy; captain role additionally gets a per-teammate category-breakdown drill-down.
 * Dashboard: overall accuracy/avg time/coverage, accuracy-over-time line chart, day streak, weakest-category callout, recent activity feed
 * Settings: account info, the calibration/limitations notes from §4 above, CSV export of personal history, clear-history option
-* Keyboard shortcuts: `A`–`D`/`1`–`4` to answer, `Enter` for next, `F` to flag
+* Keyboard shortcuts: `A`–`D`/`1`–`4` to answer (also in 1v1), `Enter` for next, `F` to flag
 
 ## 8. Open items / suggested next steps
 

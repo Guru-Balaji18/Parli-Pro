@@ -1,62 +1,70 @@
-@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
 
 :root {
-  /* Cover — the dark desk the bound manual lies on */
-  --cover: #101722;
-  --cover-2: #18222f;
-  --cover-line: rgba(243, 238, 226, 0.1);
-
-  /* Paper — warm white, not sepia. Cards sit a half-step above it. */
-  --page: #faf7f0;
-  --page-2: #f2ede1;
+  /* Canvas */
+  --bg: #f3f5ff;
+  --bg-2: #e9ecff;
   --surface: #ffffff;
-  --surface-2: #fbf9f4;
+  --surface-2: #f8f9ff;
 
-  /* Ink */
-  --ink: #1b1a17;
-  --ink-2: #4c4841;
-  --ink-3: #6b665e;
-  /* ink-4 is the faintest text used (metadata, hints) — still holds 4.5:1
-     on paper, so nothing in the UI drops below AA. */
-  --ink-4: #757067;
-  --ink-on-dark: #f3eee2;
-  --ink-on-dark-2: rgba(243, 238, 226, 0.68);
-  --ink-on-dark-3: rgba(243, 238, 226, 0.58);
+  /* Ink — ink-3 is the faintest text and still clears 4.5:1 on white */
+  --ink: #1d2142;
+  --ink-2: #474c6d;
+  --ink-3: #62678a;
+  --ink-on-color: #ffffff;
 
-  /* Accents */
-  --navy: #1a2a3a;
-  --navy-deep: #13202c;
-  --brass: #8a6413;
-  --brass-bright: #d6a851;
-  --brass-tint: rgba(138, 100, 19, 0.09);
-  --brass-tint-2: rgba(138, 100, 19, 0.16);
-  --good: #2d5a38;
-  --good-tint: rgba(45, 90, 56, 0.1);
-  --bad: #8c2f2f;
-  --bad-tint: rgba(140, 47, 47, 0.1);
+  /* Brights, each with a darker "ledge" shade for the chunky 3D press */
+  --blue: #3d6bff;
+  --blue-ledge: #2a4fd1;
+  --blue-tint: #e6ecff;
+  --violet: #8b5cf6;
+  --violet-ledge: #6d3ee0;
+  --violet-tint: #f0e9ff;
+  --pink: #ff4f8b;
+  --pink-ledge: #d93370;
+  --pink-tint: #ffe6ef;
+  --pink-ink: #b41f55;
+  --orange: #ff8a34;
+  --orange-ledge: #e06a14;
+  --orange-tint: #fff0e3;
+  --orange-ink: #a94607;
+  --yellow: #ffc83d;
+  --yellow-ledge: #e0a515;
+  --yellow-tint: #fff6db;
+  --teal: #12b8a6;
+  --teal-ledge: #0a9282;
+  --teal-tint: #dcf7f3;
+  --teal-ink: #066a61;
+  --green: #22b573;
+  --green-ledge: #178a56;
+  --green-ink: #137446;
+  --green-tint: #dcf6e9;
+  --red: #ff5a5f;
+  --red-ledge: #d83a40;
+  --red-ink: #c02a30;
+  --red-tint: #ffe5e6;
 
-  /* Rules */
-  --rule: rgba(27, 26, 23, 0.13);
-  --rule-2: rgba(27, 26, 23, 0.26);
+  /* Lines */
+  --line: #e1e5f7;
+  --line-2: #cdd3ee;
+
+  /* Shape */
+  --radius-sm: 10px;
+  --radius: 16px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
 
   /* Elevation */
-  --shadow-card: 0 1px 2px rgba(27, 26, 23, 0.05);
-  --shadow-raised: 0 2px 6px -2px rgba(27, 26, 23, 0.12), 0 1px 2px rgba(27, 26, 23, 0.05);
-  --shadow-page:
-    0 1px 0 rgba(255, 255, 255, 0.6) inset,
-    0 32px 64px -28px rgba(0, 0, 0, 0.7),
-    0 2px 6px rgba(0, 0, 0, 0.14);
-
-  --radius: 3px;
-  --radius-lg: 4px;
+  --shadow-card: 0 2px 0 var(--line), 0 10px 30px -18px rgba(40, 52, 120, 0.35);
+  --shadow-float: 0 18px 50px -20px rgba(40, 52, 120, 0.45);
 
   /* Type */
-  --font-display: 'EB Garamond', Georgia, serif;
-  --font-body: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-mono: 'IBM Plex Mono', 'SF Mono', ui-monospace, monospace;
+  --font-display: 'Fredoka', 'Nunito', system-ui, sans-serif;
+  --font-body: 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
 
-  --ease: cubic-bezier(0.4, 0, 0.2, 1);
-  --dur: 160ms;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur: 180ms;
 
   color-scheme: light;
 }
@@ -66,12 +74,12 @@
 }
 
 html, body, #root {
-  height: 100%;
+  min-height: 100%;
 }
 
 body {
   margin: 0;
-  background: var(--cover);
+  background: var(--bg);
   color: var(--ink);
   font-family: var(--font-body);
   font-size: 16px;
@@ -83,13 +91,13 @@ body {
 h1, h2, h3, h4 {
   font-family: var(--font-display);
   font-weight: 600;
-  letter-spacing: -0.008em;
+  letter-spacing: -0.005em;
   margin: 0;
-  color: var(--navy-deep);
-  line-height: 1.2;
+  color: var(--ink);
+  line-height: 1.15;
 }
 
-button {
+button, input, select, textarea {
   font-family: var(--font-body);
 }
 
@@ -98,23 +106,25 @@ a {
 }
 
 :focus-visible {
-  outline: 2px solid var(--brass);
+  outline: 3px solid var(--blue);
   outline-offset: 2px;
 }
 
-/* Numerals in data positions never reflow as values change */
+::selection {
+  background: var(--yellow);
+  color: var(--ink);
+}
+
+/* Numbers in data positions never reflow as values change */
 .mono {
-  font-family: var(--font-mono);
+  font-family: var(--font-display);
   font-variant-numeric: tabular-nums;
 }
 
-/* Small structural label. Sans, not italic serif — the serif is reserved
-   for display type so it reads as emphasis rather than decoration. */
 .label {
-  font-family: var(--font-body);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.09em;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ink-3);
 }
@@ -122,6 +132,7 @@ a {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
 }
