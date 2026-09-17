@@ -10,6 +10,9 @@ import Icon from './Icons'
 
 const COUNT_CHOICES = [5, 10, 15, 20, 30]
 const THREE_CHOICE_KEY = 'ppa_three_choice'
+const MAX_PLAYERS = 8
+// Each player gets a color, in join order.
+const TONES = ['blue', 'pink', 'green', 'orange', 'violet', 'teal', 'red', 'yellow']
 
 function readSession() {
   try {
@@ -26,6 +29,12 @@ function writeSession(id) {
   } catch {
     // storage unavailable; a refresh just won't rejoin the match
   }
+}
+
+function standing(players) {
+  return players
+    .slice()
+    .sort((a, b) => b.score - a.score || a.time_ms - b.time_ms || a.joined_at.localeCompare(b.joined_at))
 }
 
 export default function Duel({ profile, record }) {
@@ -109,8 +118,8 @@ function DuelHome({ profile, onEnter }) {
     <div>
       <div className="page-head">
         <div className="eyebrow">Head to head</div>
-        <h2>1v1 Battle</h2>
-        <p>Race a teammate through the same questions, live. Most right wins; if you tie, the faster total time takes it.</p>
+        <h2>Battle</h2>
+        <p>Race up to {MAX_PLAYERS} teammates through the same questions, live. Most right wins; if you tie, the faster total time takes it.</p>
         {tally && (
           <div className="duel-tally">
             <span><strong className="mono">{tally.wins}</strong> wins</span>
@@ -128,7 +137,7 @@ function DuelHome({ profile, onEnter }) {
             <span className="duel-panel-icon tone-pink"><Icon name="bolt" /></span>
             <div>
               <h3>Start a match</h3>
-              <p>You’ll get a code to share with your opponent.</p>
+              <p>You’ll get a code to share. Everyone joins, then you start it.</p>
             </div>
           </div>
 
@@ -169,7 +178,7 @@ function DuelHome({ profile, onEnter }) {
             3 choices, like the HOSA test
           </button>
 
-          <div className="duel-rule"><Icon name="clock" /> 30 seconds per question</div>
+          <div className="duel-rule"><Icon name="clock" /> 30 seconds per question · 2–{MAX_PLAYERS} players</div>
 
           <button className="next-btn big tone-pink" onClick={create} disabled={busy !== null || cats.length === 0}>
             {busy === 'create' ? 'Creating…' : 'Create match'}
@@ -181,7 +190,7 @@ function DuelHome({ profile, onEnter }) {
             <span className="duel-panel-icon tone-blue"><Icon name="duel" /></span>
             <div>
               <h3>Join a match</h3>
-              <p>Type the 4-letter code your opponent shared.</p>
+              <p>Type the 4-letter code the host shared.</p>
             </div>
           </div>
           <form onSubmit={join}>
@@ -208,19 +217,21 @@ function DuelHome({ profile, onEnter }) {
 
 function Match({ id, profile, record, onExit }) {
   const [duel, setDuel] = useState(null)
+  const [players, setPlayers] = useState([])
   const [loadError, setLoadError] = useState('')
   const [now, setNow] = useState(() => Date.now())
   const [picks, setPicks] = useState({})
   const [reveals, setReveals] = useState({})
   const [holdUntil, setHoldUntil] = useState(0)
   const [confirmQuit, setConfirmQuit] = useState(false)
+  const [starting, setStarting] = useState(false)
   const offset = useServerOffset()
   const lastAdvance = useRef(0)
   const duelRef = useRef(null)
 
-  // Updates can arrive out of order from realtime and polling; never go back.
-  // When a match we were watching finishes, keep the last reveal up briefly.
-  const apply = useCallback((next) => {
+  // Updates arrive from both realtime and polling; never go backwards. When a
+  // match we were watching finishes, hold the last reveal on screen briefly.
+  const applyDuel = useCallback((next) => {
     const cur = duelRef.current
     if (cur && next.current_index < cur.current_index) return
     if (cur?.status === 'active' && next.status === 'finished') setHoldUntil(Date.now() + 3200)
@@ -229,25 +240,29 @@ function Match({ id, profile, record, onExit }) {
   }, [])
 
   const load = useCallback(async () => {
-    const { data, error } = await supabase.from('duels').select('*').eq('id', id).maybeSingle()
+    const [{ data, error }, { data: roster }] = await Promise.all([
+      supabase.from('duels').select('*').eq('id', id).maybeSingle(),
+      supabase.from('duel_players').select('*').eq('duel_id', id).order('joined_at'),
+    ])
     if (error) return setLoadError('Couldn’t load the match.')
     if (!data) return setLoadError('That match no longer exists.')
-    apply(data)
-  }, [id, apply])
+    applyDuel(data)
+    if (roster) setPlayers(roster)
+  }, [id, applyDuel])
 
-  // Live updates, with a slow poll in case the realtime connection drops.
   useEffect(() => {
     load()
     const channel = supabase
       .channel(`duel-${id}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'duels', filter: `id=eq.${id}` }, (payload) => apply(payload.new))
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'duels', filter: `id=eq.${id}` }, (p) => applyDuel(p.new))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'duel_players', filter: `duel_id=eq.${id}` }, () => load())
       .subscribe()
     const poll = setInterval(load, 3000)
     return () => {
       clearInterval(poll)
       supabase.removeChannel(channel)
     }
-  }, [id, load, apply])
+  }, [id, load, applyDuel])
 
   const status = duel?.status
   const live = status === 'active' || (status === 'finished' && now < holdUntil)
@@ -260,7 +275,7 @@ function Match({ id, profile, record, onExit }) {
   const idx = duel?.current_index ?? 0
   const total = duel?.question_ids.length ?? 0
 
-  // Fetch the result of each question once it closes.
+  // Fetch each question's result once it closes.
   useEffect(() => {
     if (!duel || duel.status === 'lobby') return
     const closed = duel.status === 'finished' ? total : idx
@@ -268,12 +283,12 @@ function Match({ id, profile, record, onExit }) {
     for (let i = 0; i < closed; i++) if (!reveals[i]) missing.push(i)
     if (!missing.length) return
     let active = true
-    Promise.all(missing.map((i) => supabase.rpc('duel_reveal', { p_duel: id, p_index: i }).then((r) => [i, r.data?.[0]])))
+    Promise.all(missing.map((i) => supabase.rpc('duel_reveal', { p_duel: id, p_index: i }).then((r) => [i, r.data])))
       .then((rows) => {
         if (!active) return
         setReveals((prev) => {
           const next = { ...prev }
-          for (const [i, row] of rows) if (row) next[i] = row
+          for (const [i, row] of rows) if (row?.length) next[i] = row
           return next
         })
       })
@@ -287,7 +302,6 @@ function Match({ id, profile, record, onExit }) {
     record?.reload?.()
   }, [status, record])
 
-  const isHost = duel?.host_id === profile.id
   const serverNow = now + offset
   const started = duel?.question_started_at ? Date.parse(duel.question_started_at) : 0
   const limitMs = (duel?.seconds_per_question ?? 30) * 1000
@@ -303,11 +317,24 @@ function Match({ id, profile, record, onExit }) {
     supabase.rpc('duel_advance', { p_duel: id, p_index: idx }).then(() => load())
   }, [status, inQuestion, serverNow, started, limitMs, id, idx, load])
 
+  const seated = players.filter((p) => !p.left_at)
+  const me = players.find((p) => p.user_id === profile.id)
+  const isHost = duel?.host_id === profile.id
+  const toneOf = (userId) => TONES[Math.max(0, players.findIndex((p) => p.user_id === userId)) % TONES.length]
+
   async function answer(letter) {
     if (!inQuestion || picks[idx] || remaining <= 0) return
     setPicks((p) => ({ ...p, [idx]: letter }))
     const { error } = await supabase.rpc('duel_answer', { p_user: profile.id, p_duel: id, p_index: idx, p_selected: letter })
     if (error && !error.message?.includes('question_closed')) console.error(error)
+    load()
+  }
+
+  async function start() {
+    setStarting(true)
+    const { error } = await supabase.rpc('duel_start', { p_user: profile.id, p_duel: id })
+    setStarting(false)
+    if (error) return setLoadError(errorText(error))
     load()
   }
 
@@ -320,7 +347,7 @@ function Match({ id, profile, record, onExit }) {
     return (
       <div className="empty-state">
         <p>{loadError}</p>
-        <button className="next-btn" onClick={onExit}>Back to 1v1</button>
+        <button className="next-btn" onClick={onExit}>Back to Battle</button>
       </div>
     )
   }
@@ -330,47 +357,55 @@ function Match({ id, profile, record, onExit }) {
     return (
       <div className="empty-state">
         <p>This match was cancelled.</p>
-        <button className="next-btn" onClick={onExit}>Back to 1v1</button>
+        <button className="next-btn" onClick={onExit}>Back to Battle</button>
       </div>
     )
   }
 
   if (duel.status === 'lobby') {
-    return isHost
-      ? <Lobby duel={duel} onCancel={quit} />
-      : <div className="empty-state"><p>Joining…</p></div>
+    return (
+      <Lobby
+        duel={duel}
+        players={seated}
+        isHost={isHost}
+        starting={starting}
+        toneOf={toneOf}
+        onStart={start}
+        onLeave={quit}
+      />
+    )
   }
-
-  const me = isHost
-    ? { name: duel.host_name, score: duel.host_score, time: duel.host_time_ms, answered: duel.host_answered }
-    : { name: duel.guest_name, score: duel.guest_score, time: duel.guest_time_ms, answered: duel.guest_answered }
-  const opp = isHost
-    ? { name: duel.guest_name, score: duel.guest_score, time: duel.guest_time_ms, answered: duel.guest_answered }
-    : { name: duel.host_name, score: duel.host_score, time: duel.host_time_ms, answered: duel.host_answered }
 
   if (duel.status === 'finished' && now >= holdUntil) {
     return (
-      <Results duel={duel} profile={profile} me={me} opp={opp} reveals={reveals} isHost={isHost} onExit={onExit} />
+      <Results
+        duel={duel}
+        profile={profile}
+        players={players}
+        reveals={reveals}
+        toneOf={toneOf}
+        onExit={onExit}
+      />
     )
   }
 
   const showingIdx = inQuestion ? idx : idx - 1
   const intermission = !inQuestion
   const countdown = Math.max(1, Math.ceil((started - serverNow) / 1000))
+  const reveal = intermission ? reveals[showingIdx] : null
 
   return (
     <div className="match">
       <Scoreboard
-        me={me}
-        opp={opp}
+        players={seated}
+        meId={profile.id}
         idx={idx}
         total={total}
         inQuestion={inQuestion}
         remaining={remaining}
         limitMs={limitMs}
-        reveal={reveals[showingIdx]}
-        isHost={isHost}
-        intermission={intermission && showingIdx >= 0}
+        reveal={reveal}
+        toneOf={toneOf}
       />
 
       <AnimatePresence mode="wait">
@@ -395,7 +430,7 @@ function Match({ id, profile, record, onExit }) {
                 {countdown}
               </motion.div>
             </AnimatePresence>
-            <div className="match-countdown-sub">{total} questions · 30 seconds each</div>
+            <div className="match-countdown-sub">{total} questions · 30 seconds each · {seated.length} players</div>
           </motion.div>
         ) : (
           <QuestionCard
@@ -403,12 +438,12 @@ function Match({ id, profile, record, onExit }) {
             duel={duel}
             index={showingIdx}
             pick={picks[showingIdx]}
-            reveal={intermission ? reveals[showingIdx] : null}
-            isHost={isHost}
-            locked={intermission || Boolean(picks[showingIdx]) || me.answered >= showingIdx}
+            reveal={reveal}
+            meId={profile.id}
+            locked={intermission || Boolean(picks[showingIdx]) || (me?.answered ?? -1) >= showingIdx}
             onPick={answer}
-            oppAnswered={opp.answered >= showingIdx}
-            oppName={opp.name}
+            waitingOn={seated.filter((p) => p.answered < showingIdx && p.user_id !== profile.id)}
+            toneOf={toneOf}
             nextIn={intermission && status === 'active' ? countdown : null}
             last={showingIdx === total - 1}
           />
@@ -418,7 +453,7 @@ function Match({ id, profile, record, onExit }) {
       <div className="match-foot">
         {confirmQuit ? (
           <span className="confirm-row">
-            Quit and give your opponent the win?
+            Quit? The others keep playing without you.
             <button className="danger-btn small" onClick={quit}>Quit match</button>
             <button className="ghost-btn small" onClick={() => setConfirmQuit(false)}>Keep playing</button>
           </span>
@@ -430,7 +465,7 @@ function Match({ id, profile, record, onExit }) {
   )
 }
 
-function Lobby({ duel, onCancel }) {
+function Lobby({ duel, players, isHost, starting, toneOf, onStart, onLeave }) {
   const [copied, setCopied] = useState(false)
 
   function copy() {
@@ -445,7 +480,11 @@ function Lobby({ duel, onCancel }) {
       <div className="page-head">
         <div className="eyebrow">Waiting room</div>
         <h2>Share this code</h2>
-        <p>Your opponent opens 1v1 Battle, taps Join, and types it in. The match starts the moment they join.</p>
+        <p>
+          {isHost
+            ? `Everyone opens Battle, taps Join, and types it in. Start when your squad is in — up to ${MAX_PLAYERS} players.`
+            : 'You’re in. The host starts the match when everyone has joined.'}
+        </p>
       </div>
       <motion.div
         className="lobby-card"
@@ -468,31 +507,60 @@ function Lobby({ duel, onCancel }) {
         <button className="ghost-btn" onClick={copy}>
           <Icon name={copied ? 'check' : 'copy'} /> {copied ? 'Copied!' : 'Copy code'}
         </button>
-        <div className="lobby-wait">
-          <span className="bounce-dots" aria-hidden="true"><i /><i /><i /></span>
-          Waiting for an opponent
+
+        <div className="lobby-roster">
+          <div className="field-label">In the lobby · {players.length}/{MAX_PLAYERS}</div>
+          <ul>
+            <AnimatePresence initial={false}>
+              {players.map((p) => (
+                <motion.li
+                  key={p.user_id}
+                  className={`roster-chip tone-${toneOf(p.user_id)}`}
+                  initial={{ scale: 0.6, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.6, opacity: 0 }}
+                  transition={{ type: 'spring', stiffness: 380, damping: 20 }}
+                >
+                  <span className="avatar">{p.display_name.slice(0, 1).toUpperCase()}</span>
+                  {p.display_name}
+                  {p.user_id === duel.host_id && <span className="host-tag">host</span>}
+                </motion.li>
+              ))}
+            </AnimatePresence>
+          </ul>
         </div>
+
+        {isHost ? (
+          <button className="next-btn big tone-pink" onClick={onStart} disabled={players.length < 2 || starting}>
+            {starting ? 'Starting…' : players.length < 2 ? 'Waiting for one more player…' : `Start match · ${players.length} players`}
+          </button>
+        ) : (
+          <div className="lobby-wait">
+            <span className="bounce-dots" aria-hidden="true"><i /><i /><i /></span>
+            Waiting for the host to start
+          </div>
+        )}
+
         <div className="lobby-meta">
           {duel.question_ids.length} questions · 30s each{duel.three_choice ? ' · 3 choices' : ''}
         </div>
       </motion.div>
-      <button className="ghost-btn small" onClick={onCancel}>Cancel match</button>
+      <button className="ghost-btn small" onClick={onLeave}>{isHost ? 'Cancel match' : 'Leave lobby'}</button>
     </div>
   )
 }
 
-function Scoreboard({ me, opp, idx, total, inQuestion, remaining, limitMs, reveal, isHost, intermission }) {
+function Scoreboard({ players, meId, idx, total, inQuestion, remaining, limitMs, reveal, toneOf }) {
   const meRef = useRef(null)
-  const myCorrect = reveal ? (isHost ? reveal.host_correct : reveal.guest_correct) : null
-  const oppCorrect = reveal ? (isHost ? reveal.guest_correct : reveal.host_correct) : null
   const popped = useRef(-1)
+  const byId = useMemo(() => Object.fromEntries((reveal || []).map((r) => [r.user_id, r])), [reveal])
 
   useEffect(() => {
-    if (intermission && myCorrect && popped.current !== idx) {
+    if (reveal && byId[meId]?.is_correct && popped.current !== idx) {
       popped.current = idx
       popFrom(meRef.current)
     }
-  }, [intermission, myCorrect, idx])
+  }, [reveal, byId, meId, idx])
 
   const secs = Math.ceil(remaining / 1000)
   const frac = inQuestion ? remaining / limitMs : 1
@@ -500,76 +568,78 @@ function Scoreboard({ me, opp, idx, total, inQuestion, remaining, limitMs, revea
   const C = 2 * Math.PI * R
 
   return (
-    <div className="scoreboard">
-      <PlayerCard ref={meRef} name={me.name} score={me.score} label="You" tone="blue" gained={intermission && myCorrect} />
+    <div className="scoreboard-wrap">
       <div className="score-mid">
-        <div className="score-round">
-          {Math.min(idx + (inQuestion ? 1 : 0), total)} / {total}
-        </div>
+        <div className="score-round">Question {Math.min(idx + (inQuestion ? 1 : 0), total)} of {total}</div>
         <div className={`timer-ring ${inQuestion && secs <= 5 ? 'urgent' : ''}`}>
           <svg viewBox="0 0 64 64" aria-hidden="true">
             <circle cx="32" cy="32" r={R} className="timer-track" />
-            <circle
-              cx="32"
-              cy="32"
-              r={R}
-              className="timer-fill"
-              strokeDasharray={C}
-              strokeDashoffset={C * (1 - frac)}
-            />
+            <circle cx="32" cy="32" r={R} className="timer-fill" strokeDasharray={C} strokeDashoffset={C * (1 - frac)} />
           </svg>
-          <span className="timer-num mono">{inQuestion ? secs : 'VS'}</span>
+          <span className="timer-num mono">{inQuestion ? secs : '·'}</span>
         </div>
       </div>
-      <PlayerCard name={opp.name} score={opp.score} label="Opponent" tone="pink" gained={intermission && oppCorrect} />
-    </div>
-  )
-}
-
-function PlayerCard({ ref, name, score, label, tone, gained }) {
-  return (
-    <div ref={ref} className={`player-card tone-${tone}`}>
-      <span className="avatar big">{(name || '?').slice(0, 1).toUpperCase()}</span>
-      <div className="player-info">
-        <div className="player-label">{label}</div>
-        <div className="player-name">{name}</div>
-      </div>
-      <div className="player-score">
-        <AnimatePresence mode="popLayout">
-          <motion.span
-            key={score}
-            className="mono"
-            initial={{ y: -18, scale: 1.6, opacity: 0 }}
-            animate={{ y: 0, scale: 1, opacity: 1 }}
-            exit={{ y: 18, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 420, damping: 18 }}
-          >
-            {score}
-          </motion.span>
-        </AnimatePresence>
-        <AnimatePresence>
-          {gained && (
-            <motion.span
-              className="plus-one"
-              initial={{ y: 6, opacity: 0, scale: 0.6 }}
-              animate={{ y: -22, opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 300, damping: 14 }}
+      <ul className="scoreboard">
+        {standing(players).map((p, i) => {
+          const r = byId[p.user_id]
+          const isMe = p.user_id === meId
+          return (
+            <motion.li
+              key={p.user_id}
+              layout
+              transition={{ type: 'spring', stiffness: 400, damping: 32 }}
+              className={`player-card tone-${toneOf(p.user_id)} ${isMe ? 'me' : ''}`}
+              ref={isMe ? meRef : undefined}
             >
-              +1
-            </motion.span>
-          )}
-        </AnimatePresence>
-      </div>
+              <span className="player-rank mono">{i + 1}</span>
+              <span className="avatar">{p.display_name.slice(0, 1).toUpperCase()}</span>
+              <div className="player-info">
+                <div className="player-name">{isMe ? 'You' : p.display_name}</div>
+                <div className="player-state">
+                  {reveal
+                    ? r?.is_correct ? 'correct' : r?.selected ? 'wrong' : 'no answer'
+                    : p.answered >= idx ? 'locked in' : 'thinking…'}
+                </div>
+              </div>
+              <div className="player-score">
+                <AnimatePresence mode="popLayout">
+                  <motion.span
+                    key={p.score}
+                    className="mono"
+                    initial={{ y: -16, scale: 1.5, opacity: 0 }}
+                    animate={{ y: 0, scale: 1, opacity: 1 }}
+                    exit={{ y: 16, opacity: 0 }}
+                    transition={{ type: 'spring', stiffness: 420, damping: 18 }}
+                  >
+                    {p.score}
+                  </motion.span>
+                </AnimatePresence>
+                <AnimatePresence>
+                  {reveal && r?.is_correct && (
+                    <motion.span
+                      className="plus-one"
+                      initial={{ y: 6, opacity: 0, scale: 0.6 }}
+                      animate={{ y: -22, opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ type: 'spring', stiffness: 300, damping: 14 }}
+                    >
+                      +1
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </div>
+            </motion.li>
+          )
+        })}
+      </ul>
     </div>
   )
 }
 
-function QuestionCard({ duel, index, pick, reveal, isHost, locked, onPick, oppAnswered, oppName, nextIn, last }) {
+function QuestionCard({ duel, index, pick, reveal, meId, locked, onPick, waitingOn, toneOf, nextIn, last }) {
   const q = QUESTION_MAP[duel.question_ids[index]]
   const layout = useMemo(() => (q ? layoutWithHidden(q, duel.hidden[index] || null) : []), [q, duel.hidden, index])
 
-  // Keyboard answers: A–D or 1–4.
   useEffect(() => {
     function onKey(e) {
       if (locked || e.target.tagName === 'INPUT' || e.ctrlKey || e.metaKey || e.altKey) return
@@ -583,8 +653,9 @@ function QuestionCard({ duel, index, pick, reveal, isHost, locked, onPick, oppAn
   }, [locked, layout, onPick])
 
   if (!q) return null
-  const mine = reveal ? (isHost ? reveal.host_selected : reveal.guest_selected) : pick
-  const theirs = reveal ? (isHost ? reveal.guest_selected : reveal.host_selected) : null
+  const correct = reveal?.[0]?.correct
+  const mine = reveal ? reveal.find((r) => r.user_id === meId)?.selected : pick
+  const pickedBy = (orig) => (reveal || []).filter((r) => r.selected === orig)
 
   return (
     <motion.div
@@ -596,16 +667,20 @@ function QuestionCard({ duel, index, pick, reveal, isHost, locked, onPick, oppAn
     >
       <div className="q-card-top">
         <span className="q-cat">{q.category}</span>
-        <span className={`opp-status ${reveal ? 'hide' : oppAnswered ? 'done' : ''}`}>
-          {oppAnswered ? <><Icon name="check" /> {oppName} locked in</> : <>{oppName} is thinking<span className="bounce-dots small" aria-hidden="true"><i /><i /><i /></span></>}
-        </span>
+        {!reveal && (
+          <span className={`opp-status ${waitingOn.length === 0 ? 'done' : ''}`}>
+            {waitingOn.length === 0
+              ? <><Icon name="check" /> everyone’s locked in</>
+              : <>waiting on {waitingOn.map((p) => p.display_name).join(', ')}<span className="bounce-dots small" aria-hidden="true"><i /><i /><i /></span></>}
+          </span>
+        )}
       </div>
       <div className="q-text">{q.question}</div>
       <div className="q-options">
         {layout.map(({ shown, orig, text }, i) => {
           let cls = 'q-option'
           if (reveal) {
-            if (orig === reveal.correct) cls += ' correct'
+            if (orig === correct) cls += ' correct'
             else if (orig === mine) cls += ' incorrect'
             else cls += ' dim'
           } else if (orig === mine) cls += ' selected'
@@ -621,10 +696,13 @@ function QuestionCard({ duel, index, pick, reveal, isHost, locked, onPick, oppAn
             >
               <span className="q-letter">{shown}</span>
               <span className="q-option-text">{text}</span>
-              {reveal && (
+              {reveal && pickedBy(orig).length > 0 && (
                 <span className="pick-tags">
-                  {orig === mine && <span className="pick-tag tone-blue">You</span>}
-                  {orig === theirs && <span className="pick-tag tone-pink">{oppName}</span>}
+                  {pickedBy(orig).map((r) => (
+                    <span key={r.user_id} className={`pick-tag tone-${toneOf(r.user_id)}`}>
+                      {r.user_id === meId ? 'You' : r.display_name}
+                    </span>
+                  ))}
                 </span>
               )}
             </motion.button>
@@ -634,7 +712,7 @@ function QuestionCard({ duel, index, pick, reveal, isHost, locked, onPick, oppAn
       <div className="duel-q-foot">
         {reveal ? (
           <span>
-            {mine === reveal.correct ? 'Nice! You got it.' : mine ? 'Not this time.' : 'Out of time.'}
+            {mine === correct ? 'Nice! You got it.' : mine ? 'Not this time.' : 'Out of time.'}
             {nextIn ? ` ${last ? 'Results' : 'Next question'} in ${nextIn}…` : ''}
           </span>
         ) : pick ? (
@@ -647,10 +725,14 @@ function QuestionCard({ duel, index, pick, reveal, isHost, locked, onPick, oppAn
   )
 }
 
-function Results({ duel, profile, me, opp, reveals, isHost, onExit }) {
+function Results({ duel, profile, players, reveals, toneOf, onExit }) {
+  const table = standing(players.filter((p) => !p.left_at))
+  const quitters = players.filter((p) => p.left_at)
   const won = duel.winner_id === profile.id
   const draw = !duel.winner_id
-  const tiebreak = !draw && me.score === opp.score
+  const champion = table[0]
+  const me = players.find((p) => p.user_id === profile.id)
+  const myPlace = table.findIndex((p) => p.user_id === profile.id) + 1
   const celebrated = useRef(false)
 
   useEffect(() => {
@@ -660,12 +742,15 @@ function Results({ duel, profile, me, opp, reveals, isHost, onExit }) {
     }
   }, [won])
 
-  const title = draw ? 'It’s a draw!' : won ? 'You win!' : `${opp.name} wins`
-  const sub = duel.forfeit
-    ? won ? 'Your opponent left the match.' : 'You left the match.'
-    : tiebreak
-      ? `Tied on points, decided by total time (${(me.time / 1000).toFixed(1)}s vs ${(opp.time / 1000).toFixed(1)}s).`
-      : draw ? 'Same score and same total time.' : won ? 'Great battle.' : 'Rematch?'
+  const alone = table.length === 1 && quitters.length > 0
+  const title = draw ? 'It’s a draw!' : won ? 'You win!' : `${champion?.display_name} wins`
+  const sub = alone
+    ? 'Everyone else left the match.'
+    : draw
+      ? 'Same score and same total time at the top.'
+      : won
+        ? `You finished first out of ${table.length}.`
+        : myPlace ? `You came ${myPlace === 2 ? '2nd' : myPlace === 3 ? '3rd' : `${myPlace}th`} of ${table.length}.` : 'You left this match.'
 
   return (
     <div className="results">
@@ -685,19 +770,31 @@ function Results({ duel, profile, me, opp, reveals, isHost, onExit }) {
         </motion.div>
         <h2>{title}</h2>
         <p>{sub}</p>
-        <div className="results-score">
-          <div>
-            <span className="avatar big tone-blue">{me.name.slice(0, 1).toUpperCase()}</span>
-            <strong className="mono">{me.score}</strong>
-            <small>You · {(me.time / 1000).toFixed(1)}s</small>
-          </div>
-          <span className="results-dash">–</span>
-          <div>
-            <span className="avatar big tone-pink">{(opp.name || '?').slice(0, 1).toUpperCase()}</span>
-            <strong className="mono">{opp.score}</strong>
-            <small>{opp.name} · {(opp.time / 1000).toFixed(1)}s</small>
-          </div>
-        </div>
+        <ol className="standings">
+          {table.map((p, i) => (
+            <motion.li
+              key={p.user_id}
+              className={`standing-row ${p.user_id === profile.id ? 'me' : ''}`}
+              initial={{ opacity: 0, x: -14 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.25 + i * 0.08 }}
+            >
+              <span className="standing-place mono">{i + 1}</span>
+              <span className={`avatar tone-${toneOf(p.user_id)}`}>{p.display_name.slice(0, 1).toUpperCase()}</span>
+              <span className="standing-name">{p.user_id === profile.id ? 'You' : p.display_name}</span>
+              <span className="standing-score mono">{p.score}</span>
+              <span className="standing-time">{(p.time_ms / 1000).toFixed(1)}s</span>
+            </motion.li>
+          ))}
+          {quitters.map((p) => (
+            <li key={p.user_id} className="standing-row out">
+              <span className="standing-place">—</span>
+              <span className="avatar">{p.display_name.slice(0, 1).toUpperCase()}</span>
+              <span className="standing-name">{p.user_id === profile.id ? 'You' : p.display_name}</span>
+              <span className="standing-score">left</span>
+            </li>
+          ))}
+        </ol>
         <button className="next-btn big" onClick={onExit}>Play again</button>
       </motion.div>
 
@@ -705,13 +802,12 @@ function Results({ duel, profile, me, opp, reveals, isHost, onExit }) {
       <ol className="exam-review duel-review">
         {duel.question_ids.map((qid, i) => {
           const q = QUESTION_MAP[qid]
-          const r = reveals[i]
+          const rows = reveals[i] || []
           if (!q) return null
           const layout = layoutWithHidden(q, duel.hidden[i] || null)
           const shown = (orig) => layout.find((o) => o.orig === orig)?.shown ?? orig
-          const mine = r ? (isHost ? r.host_selected : r.guest_selected) : null
-          const theirs = r ? (isHost ? r.guest_selected : r.host_selected) : null
-          const myOk = r && mine === r.correct
+          const myRow = rows.find((r) => r.user_id === profile.id)
+          const myOk = myRow?.is_correct
           return (
             <motion.li
               key={qid}
@@ -722,14 +818,13 @@ function Results({ duel, profile, me, opp, reveals, isHost, onExit }) {
             >
               <div className="er-q">{q.question}</div>
               <div className="duel-review-picks">
-                <span className={`pick-result ${myOk ? 'good' : 'bad'}`}>
-                  You: {mine ? `${shown(mine)} — ${q.options[mine]}` : 'no answer'}
-                </span>
-                <span className={`pick-result ${r && theirs === r.correct ? 'good' : 'bad'}`}>
-                  {opp.name}: {theirs ? `${shown(theirs)} — ${q.options[theirs]}` : 'no answer'}
-                </span>
+                {rows.map((r) => (
+                  <span key={r.user_id} className={`pick-result ${r.is_correct ? 'good' : 'bad'}`}>
+                    {r.user_id === profile.id ? 'You' : r.display_name}: {r.selected ? shown(r.selected) : '—'}
+                  </span>
+                ))}
               </div>
-              {!myOk && (
+              {!myOk && me && (
                 <>
                   <div className="er-correct">Correct: <strong>{shown(q.answer)}</strong> — {q.options[q.answer]}</div>
                   <Explanation id={q.id} letter={shown(q.answer)} answerText={q.options[q.answer]} />

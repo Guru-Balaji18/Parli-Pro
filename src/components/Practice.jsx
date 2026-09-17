@@ -22,10 +22,9 @@ function fmtClock(s) {
 }
 
 export default function Practice({ mode, record, profile, onLookup }) {
-  const { attempts, flags, reload, setFlags } = record
+  const { attempts, reload } = record
   const isExam = mode === 'exam'
   const isReview = mode === 'review'
-  const isFlagged = mode === 'flagged'
 
   const countsByCategory = useMemo(() => {
     const m = {}
@@ -62,9 +61,8 @@ export default function Practice({ mode, record, profile, onLookup }) {
   const practicePool = useMemo(() => questions.filter((q) => selected.includes(q.category_id)), [selected])
   const review = useMemo(() => (attempts ? reviewState(attempts) : null), [attempts])
   const reviewPool = useMemo(() => (review ? questions.filter((q) => review.due.has(q.id)) : []), [review])
-  const flaggedPool = useMemo(() => (flags ? questions.filter((q) => flags.has(q.id)) : []), [flags])
-  const basePool = isReview ? reviewPool : isFlagged ? flaggedPool : practicePool
-  const poolLoading = (isReview && !attempts) || (isFlagged && !flags)
+  const basePool = isReview ? reviewPool : practicePool
+  const poolLoading = isReview && !attempts
 
   const resetRound = useCallback((pool) => {
     setQueue(shuffle(pool))
@@ -198,22 +196,6 @@ export default function Practice({ mode, record, profile, onLookup }) {
     startRef.current = performance.now()
   }
 
-  async function toggleFlag() {
-    if (!current || !flags) return
-    const id = current.id
-    const on = flags.has(id)
-    const { error } = on
-      ? await supabase.from('flags').delete().eq('question_id', id).eq('user_id', profile.id)
-      : await supabase.from('flags').insert({ question_id: id, user_id: profile.id })
-    if (error) return console.error(error)
-    setFlags((prevFlags) => {
-      const nextFlags = new Set(prevFlags)
-      if (on) nextFlags.delete(id)
-      else nextFlags.add(id)
-      return nextFlags
-    })
-  }
-
   function toggleThreeChoice() {
     const on = !threeChoice
     setThreeChoice(on)
@@ -278,7 +260,7 @@ export default function Practice({ mode, record, profile, onLookup }) {
           e.preventDefault()
           next()
         }
-      } else if (k === 'f') toggleFlag()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -395,7 +377,6 @@ export default function Practice({ mode, record, profile, onLookup }) {
   const heads = {
     practice: { eyebrow: 'Question bank', title: 'Practice', blurb: `${basePool.length.toLocaleString()} questions in the current filter. Reshuffles and keeps going until you stop.` },
     review: { eyebrow: 'Targeted drilling', title: 'Missed Questions', blurb: `Questions you've missed. Each one leaves this list once you've answered it right on ${REVIEW_CLEAR_DAYS} different days — right twice in one day counts once.` },
-    flagged: { eyebrow: 'Targeted drilling', title: 'Flagged Questions', blurb: 'Questions you marked to come back to. Press F to flag or unflag.' },
   }
   const head = heads[mode] || heads.practice
   const correctShown = current ? layout.find((o) => o.orig === current.answer)?.shown : null
@@ -429,7 +410,7 @@ export default function Practice({ mode, record, profile, onLookup }) {
         </CategoryFilter>
       )}
 
-      {(isReview || isFlagged) && <div className="practice-tools">{choiceToggle}</div>}
+      {isReview && <div className="practice-tools">{choiceToggle}</div>}
 
       {session.count > 0 && !isExam && (
         <div className="session-bar">
@@ -450,8 +431,6 @@ export default function Practice({ mode, record, profile, onLookup }) {
             ? review?.waiting.size
               ? `All caught up for today. ${review.waiting.size} ${review.waiting.size === 1 ? 'question comes' : 'questions come'} back tomorrow for a second right answer.`
               : "Nothing to review — you haven't missed anything yet."
-            : isFlagged
-            ? 'No flagged questions. Press F while practicing to flag one.'
             : 'Pick at least one category to start.'}
         </div>
       )}
@@ -466,15 +445,6 @@ export default function Practice({ mode, record, profile, onLookup }) {
                   Right on {review.progress.get(current.id)} of {REVIEW_CLEAR_DAYS} days
                 </span>
               )}
-              <button
-                className={`flag-btn ${flags?.has(current.id) ? 'on' : ''}`}
-                onClick={toggleFlag}
-                title="Flag this question (F)"
-                aria-pressed={flags?.has(current.id) ? 'true' : 'false'}
-              >
-                <StarIcon filled={flags?.has(current.id)} />
-                {flags?.has(current.id) ? 'Flagged' : 'Flag'}
-              </button>
               {!isExam && <span className="q-timer mono">{elapsed.toFixed(1)}s</span>}
             </div>
           </div>
@@ -533,7 +503,7 @@ export default function Practice({ mode, record, profile, onLookup }) {
 
       {current && (
         <div className="shortcut-hint">
-          A–{layout[layout.length - 1]?.shown} or 1–{layout.length} to answer · Enter for next · F to flag
+          A–{layout[layout.length - 1]?.shown} or 1–{layout.length} to answer · Enter for next
         </div>
       )}
     </div>
@@ -554,14 +524,6 @@ function ThreeChoiceToggle({ on, onToggle }) {
       <span className="choice-toggle-track" aria-hidden="true"><span /></span>
       3 choices, like the HOSA test
     </button>
-  )
-}
-
-function StarIcon({ filled }) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
-      <path d="M12 3.5l2.6 5.55 5.9.8-4.3 4.3 1.05 6.05L12 17.3l-5.25 2.9L7.8 14.15 3.5 9.85l5.9-.8L12 3.5z" />
-    </svg>
   )
 }
 

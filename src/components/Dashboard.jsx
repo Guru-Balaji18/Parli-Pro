@@ -12,7 +12,7 @@ const TOTAL_Q = questions.length
 const TOOLTIP = { fontFamily: 'Nunito', fontWeight: 700, fontSize: 13, border: '2px solid #e1e5f7', borderRadius: 12 }
 
 export default function Dashboard({ record, goTo }) {
-  const { attempts, flags, error } = record
+  const { attempts, error } = record
 
   if (error) return <Shell><div className="empty-state">{error}</div></Shell>
   if (!attempts) return <Shell><div className="empty-state">Loading your record…</div></Shell>
@@ -78,10 +78,6 @@ export default function Dashboard({ record, goTo }) {
         <button className="callout clickable" onClick={() => goTo('review')}>
           <div className="callout-num mono">{review.due.size}</div>
           <div>due for review →</div>
-        </button>
-        <button className="callout clickable" onClick={() => goTo('flagged')}>
-          <div className="callout-num mono">{flags?.size ?? 0}</div>
-          <div>flagged →</div>
         </button>
         {weakest && (
           <div className="callout wide">

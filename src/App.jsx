@@ -20,10 +20,9 @@ const PROFILE_KEY = 'ppa_profile'
 const NAV = [
   { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', color: 'blue' },
   { id: 'practice', label: 'Practice', icon: 'practice', color: 'violet' },
-  { id: 'duel', label: '1v1 Battle', icon: 'duel', color: 'pink' },
+  { id: 'duel', label: 'Battle', icon: 'duel', color: 'pink' },
   { id: 'exam', label: 'Mock Test', icon: 'exam', color: 'orange' },
   { id: 'review', label: 'Missed', icon: 'review', color: 'red' },
-  { id: 'flagged', label: 'Flagged', icon: 'flagged', color: 'yellow' },
   { id: 'team', label: 'Team', icon: 'team', color: 'teal' },
   { id: 'vocab', label: 'Vocabulary', icon: 'vocab', color: 'green' },
   { id: 'reference', label: 'Reference', icon: 'reference', color: 'blue' },
@@ -69,7 +68,7 @@ function App() {
 
   const isAdmin = profile.role === 'admin'
   const nav = isAdmin ? [...NAV, ADMIN_NAV] : NAV
-  const drillModes = ['practice', 'exam', 'review', 'flagged']
+  const drillModes = ['practice', 'exam', 'review']
   const color = nav.find((n) => n.id === view)?.color || 'blue'
 
   return (

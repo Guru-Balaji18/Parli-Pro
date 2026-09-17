@@ -27,7 +27,7 @@ The publishable key is already hardcoded in `src/lib/supabase.js` — it's safe 
 ### Tables
 
 * `profiles` — `id` (uuid pk), `display_name` (unique), `pin_hash`, `role` (`'member'` | `'captain'`), `created_at`. One row per team member.
-* `attempts` — every practice/exam answer: `question_id`, `category_id`, `selected_answer`, `is_correct`, `time_seconds`, `mode` (`practice`/`exam`/`review`/`flagged`/`duel`), `answered_at`, `user_id` (fk → profiles).
+* `attempts` — every practice/exam answer: `question_id`, `category_id`, `selected_answer`, `is_correct`, `time_seconds`, `mode` (`practice`/`exam`/`review`/`duel`; `flagged` appears in old rows), `answered_at`, `user_id` (fk → profiles).
 * `flags` — `question_id`, `user_id`: questions a user starred to revisit.
 * `exam_sessions` — one row per completed mock test: `question_count`, `correct_count`, `duration_seconds`, `user_id`.
 
@@ -41,13 +41,14 @@ The publishable key is already hardcoded in `src/lib/supabase.js` — it's safe 
 
 * `team_leaderboard` — same aggregation as above but all-time (no `since` filter). Views in Postgres run with the owner's privileges by default, which is how this bypasses RLS to aggregate across every user's attempts without needing real per-request auth.
 
-### 1v1 duels (2026-09-17)
+### Battle — multiplayer matches (2026-09-17)
 
-* `duels` — one row per match: 4-character `code` (unique among lobby/active matches), `host_id`/`host_name`, `guest_id`/`guest_name`, `status` (`lobby`/`active`/`finished`/`abandoned`), `question_ids`, `hidden` (the wrong letter hidden per question in 3-choice mode, `''` otherwise, same for both players), `current_index`, `question_started_at`, `seconds_per_question` (30), `host_answered`/`guest_answered` (last index answered), running `*_score` and `*_time_ms`, `winner_id` (null = draw), `forfeit`. Clients can SELECT it (it's in the `supabase_realtime` publication) but can't write it.
+* `duels` — one row per match: 4-character `code` (unique among lobby/active matches), `host_id`/`host_name`, `status` (`lobby`/`active`/`finished`/`abandoned`), `question_ids`, `hidden` (the wrong letter hidden per question in 3-choice mode, `''` otherwise, the same for everyone), `current_index`, `question_started_at`, `seconds_per_question` (30), `max_players` (8), `winner_id` (null = draw), `forfeit`.
+* `duel_players` — one row per player per match: `display_name`, running `score` and `time_ms`, `answered` (last question index they answered), `joined_at` (also the color order in the UI), `left_at` (quit mid-match). Clients can read `duels` and `duel_players` — both are in the `supabase_realtime` publication — but can't write either.
 * `duel_keys` (answer key + category per question) and `duel_answers` (each pick, correctness, time) have no client grants at all.
-* Functions (security definer, identify the player by profile id like the rest of the app): `duel_create`, `duel_join` (starts the match 4s later), `duel_answer` (server times the answer, grades it, logs an `attempts` row with mode `duel` only when both players have accounts, and closes the question once both have answered), `duel_advance` (closes a question when both answered or its time plus 1s grace is up; idempotent, called by clients on timeout), `duel_reveal` (both picks + key, only for closed questions), `duel_leave` (cancel lobby / forfeit), `duel_record` (wins/losses/draws), `server_now` (clock sync).
-* Scores are tallied only when a question closes, and picks stay hidden until then, so neither player can see the other's answer early. The next question starts 3.5s after a close, which is the reveal window. Winner: most correct, then lower total time (an unanswered question counts the full 30s), else a draw.
-* Tested with a full scripted match in a rolled-back transaction, and live in the browser against a placeholder opponent with no account (those two test rows, codes `TST1` and `6RG8`, have a null `guest_id` and are ignored by `duel_record`).
+* Functions (security definer, identify the player by profile id like the rest of the app): `duel_create` (seats the creator), `duel_join`, `duel_start` (host only, needs 2+ players, starts the match 4s later), `duel_answer` (server times and grades the answer, logs an `attempts` row with mode `duel` when the match has more than one player, then closes the question if everyone has answered), `duel_advance` (closes a question when all remaining players have answered or its time plus 1s grace is up; idempotent, called by clients on timeout), `duel_settle` (decides the winner), `duel_reveal` (every player's pick + the key, only for closed questions), `duel_leave` (cancel lobby / leave a lobby / quit a live match — the rest play on, and the match ends if fewer than two remain), `duel_record` (wins/losses/draws), `server_now` (clock sync).
+* Scores are tallied only when a question closes and picks stay hidden until then, so nobody can see another player's answer early. The next question starts 3.5s after a close, which is the reveal window. Winner: most correct, then lowest total time (an unanswered question counts the full 30s); a remaining tie is a draw.
+* Tested with a scripted three-player match in a rolled-back transaction, and live in the browser with two simulated teammates (lobby fill, host start, live scoreboard, reveal tags, standings). Matches from before this migration have no `duel_players` rows, so `duel_record` ignores them.
 
 ### Security model — read this before "fixing" it
 
@@ -78,8 +79,8 @@ parlipro-app/
 │   ├── components/
 │   │   ├── TeamAuth.jsx     — login/signup (replaces old Login.jsx, now deleted)
 │   │   ├── Dashboard.jsx    — personal stats, charts, streak
-│   │   ├── Practice.jsx     — the core quiz engine: practice/exam/review/flagged modes all live here
-│   │   ├── Duel.jsx         — 1v1 Battle: home (create/join), lobby, live match, results
+│   │   ├── Practice.jsx     — the core quiz engine: practice/exam/review modes all live here
+│   │   ├── Duel.jsx         — Battle: home (create/join), lobby, live match, results
 │   │   ├── Explanation.jsx  — lazy-loaded RONR explanation block, shared by Practice and Duel
 │   │   ├── CountUp.jsx      — animated number for dashboard stats
 │   │   ├── Icons.jsx        — rounded line icon set (nav + UI)
@@ -103,7 +104,7 @@ parlipro-app/
 │       └── challengeWeek.js — Friday 00:00 America/New_York week boundaries, identical on every device regardless of its time zone; DST-safe (weeks spanning a change are 167h/169h)
 ```
 
-`Practice.jsx` is intentionally one large component handling four modes (`practice`/`exam`/`review`/`flagged`) via a `mode` prop rather than four separate components — they share almost all state logic (timer, answer reveal, flagging, keyboard shortcuts) and only differ in question-pool source and end-of-session behavior.
+`Practice.jsx` is intentionally one large component handling three modes (`practice`/`exam`/`review`) via a `mode` prop rather than three separate components — they share almost all state logic (timer, answer reveal, flagging, keyboard shortcuts) and only differ in question-pool source and end-of-session behavior.
 
 ## 4. The question bank — provenance & known limitations
 
@@ -151,19 +152,19 @@ The earlier formal "Open Ledger" look (navy cover, parchment page, EB Garamond, 
 * Team accounts: name + PIN signup/login (see security model above)
 * Practice mode: category filter (12 categories), endless shuffle, stopwatch (counts up, no limit — user explicitly chose this over a countdown), instant feedback, "Read more on [motion]" cross-link to Reference/Vocab
 * Mock Test mode: 50 questions / 60-minute countdown (mirrors real HOSA Round 1), back/forward navigation, full review at the end, flags 70%+ scores (NAP's real recognition threshold)
+* Flagged Questions were removed from the site on 2026-09-17 at the user's request (nav item, flag button, `F` shortcut and dashboard count). The `flags` table and its rows are untouched, so the feature could come back.
 * Missed Questions: spaced repetition (`lib/review.js`). A missed question stays until it's answered right on 2 different Eastern calendar days since its latest miss; right twice on one day counts once, so a question answered right today waits until tomorrow. Dashboard shows the count due today.
-* 3 choices mode: toggle in Practice / Missed / Flagged / Mock Test intro (remembered per device in localStorage). Hides one wrong answer — the same one for the whole session — and re-letters A–C to match the real HOSA format. The 301 questions with answers like "All of the above" always keep four, because hiding one would break them. Attempts still store the bank's original letter.
+* 3 choices mode: toggle in Practice / Missed / Mock Test intro (remembered per device in localStorage). Hides one wrong answer — the same one for the whole session — and re-letters A–C to match the real HOSA format. The 301 questions with answers like "All of the above" always keep four, because hiding one would break them. Attempts still store the bank's original letter.
 * Match drill (Reference → Match drill; `lib/motionMatch.js`, `components/MotionMatch.jsx`): 10 rounds. Each round picks one column of the motions chart (second / debatable / amendable / vote) and five motions whose answers differ; you tap a motion, then its answer. Tiles spell out the chart's shorthand. It drills `data/motions.js` directly, so that chart must stay accurate — its values were checked against each motion's Standard Descriptive Characteristics in RONR 12th ed. on 2026-09-16 (fixes: Commit's debate is limited; Discharge a Committee needs two-thirds or a majority with notice). Local score only. (An earlier "Motion Drill" nav tab on precedence was removed at the user's request.)
 * Answer explanations (`data/explanations.json`, lazy-loaded by `Explanation` in `Practice.jsx` so the ~550 KB file stays out of the main bundle): every one of the 1,610 questions has one, shown after answering (and on missed mock-test questions). Each source names where it is in RONR 12th ed. and says what that passage says in a close, clearly labeled paraphrase. It is deliberately not quoted, because the book is under copyright and the site is publicly reachable. `ref` is a paragraph (`46:6`), a footnote (`3:16n3`), a Table II row (`T2-28`), a tinted-page list (`L-V`), or `Intro`; `citation()` turns it into readable text, and `section` holds the section or table title. The PDF has no printed page numbers, so never cite pages. `answer` is the "So:" line and must not mention option letters, since 3-choice mode relabels them. The component adds Dunbar's key letter itself. `conflict` flags the 22 questions where Dunbar's key is shaky or wrong under the 12th ed. The file was generated by a one-off pipeline (RONR text index, retrieval, hand-written batches, validation) kept outside the repo. Edit the JSON directly for fixes.
 * Admin (`components/Admin.jsx`; nav item shown only to role `admin`; `guru` is the admin): member stats, each member's full answer history / mock tests / flags, and removing members. All of it goes through `admin_members`, `admin_member_history` and `admin_remove_member` — security-definer functions that re-verify the admin's name + PIN through `admin_check`, which clients can't call. The PIN lives in component state only (re-entered each visit). Removal explicitly deletes the member's attempts, flags and exam sessions (their FKs are ON DELETE SET NULL) and refuses to remove yourself or another admin. The client-side role check only hides the nav item; the database is the real gate.
-* 1v1 Battle (`components/Duel.jsx`, schema in §2): live head-to-head matches joined by a 4-character room code. The creator picks the number of questions (5–30 chips or 3–50 custom), categories, and 3-choice mode; each question has a 30-second server-timed clock. Live scoreboard, opponent "locked in" indicator, a reveal of both picks after each question, a results screen with a per-question review and explanations, and a win/loss/draw tally. Updates come over Supabase Realtime with a 3-second polling fallback, and the active match id is kept in sessionStorage so a refresh rejoins it. Quitting mid-match forfeits.
-* Flagged Questions: manual star/flag, `F` keyboard shortcut
+* Battle (`components/Duel.jsx`, schema in §2): live matches for 2–8 players, joined by a 4-character room code. The creator picks the number of questions (5–30 chips or 3–50 custom), categories and 3-choice mode, then starts the match once everyone is in the lobby. Each question has a 30-second server-timed clock and closes early when everyone has answered. Live scoreboard that reorders by score and shows each player's state, everyone's pick tagged on the answers during the reveal, final standings with places and times, a per-question review with explanations, and a win/loss/draw tally. Updates come over Supabase Realtime with a 3-second polling fallback, and the active match id is kept in sessionStorage so a refresh rejoins it. Quitting drops you from the standings; the rest play on.
 * Vocabulary: 79 terms, browse (search + filter) and flashcard modes
 * Reference: full motions precedence chart (privileged/incidental/subsidiary/main/bring-back classes) + 4-tier study priority list from a frequency analysis of the original Dunbar files
 * Team tab: leaderboard with This Week / All-Time toggle. "This Week" resets Friday 12:00 AM US Eastern Time for every viewer regardless of device time zone, DST-aware (see `challengeWeek.js`; no automated tests are checked in — it was verified by hand across both 2026 DST transitions and six device time zones). Everyone sees name + accuracy; captain role additionally gets a per-teammate category-breakdown drill-down.
 * Dashboard: overall accuracy/avg time/coverage, accuracy-over-time line chart, day streak, weakest-category callout, recent activity feed
 * Settings: account info, the calibration/limitations notes from §4 above, CSV export of personal history, clear-history option
-* Keyboard shortcuts: `A`–`D`/`1`–`4` to answer (also in 1v1), `Enter` for next, `F` to flag
+* Keyboard shortcuts: `A`–`D`/`1`–`4` to answer (also in Battle), `Enter` for next
 
 ## 8. Open items / suggested next steps
 

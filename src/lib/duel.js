@@ -54,7 +54,10 @@ export function useServerOffset() {
 export function errorText(error) {
   const msg = error?.message || ''
   if (msg.includes('no_such_match')) return 'No open match with that code. Check the letters and try again.'
-  if (msg.includes('match_full')) return 'That match already has two players.'
+  if (msg.includes('match_full')) return 'That match is full.'
+  if (msg.includes('match_started')) return 'That match has already started.'
+  if (msg.includes('need_two_players')) return 'You need at least two players to start.'
+  if (msg.includes('not_the_host')) return 'Only the host can start the match.'
   if (msg.includes('bad_questions')) return 'Pick between 3 and 50 questions.'
   if (msg.includes('unknown_player')) return 'Your account wasn’t found. Try logging out and back in.'
   return 'Couldn’t reach the server. Try again.'
