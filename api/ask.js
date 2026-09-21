@@ -14,10 +14,19 @@ const SUPABASE_URL = process.env.SUPABASE_URL || 'https://eqjexfceuwmsujhjvfim.s
 const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || 'sb_publishable_yYHoFVdj4pgwjKKt3gjFKQ_IsxkMk4l'
 const MODEL = process.env.GEMINI_MODEL || 'gemini-3.6-flash'
 
+// Gemini 3.x replaced thinkingBudget with thinkingLevel, and sending both is a
+// 400. Only 3.6 accepts "minimal"; "low" is the safe floor everywhere else.
+const THINKING_LEVEL =
+  process.env.GEMINI_THINKING_LEVEL || (MODEL.startsWith('gemini-3.6') ? 'minimal' : 'low')
+
 const MAX_TURNS = 12
 const MAX_CHARS = 1200
 const MAX_CONTEXT = 12000
-const TIMEOUT_MS = 25000
+const ATTEMPT_MS = 20000
+const TOTAL_MS = 45000
+
+// Vercel would otherwise cut the function off before a slow answer arrives.
+export const maxDuration = 60
 
 const SYSTEM_PROMPT = `You are the study tutor built into Parli Pro, a practice app used by a high school HOSA Parliamentary Procedure team. You are talking to a teammate who is studying.
 
@@ -129,20 +138,27 @@ export default async function handler(req, res) {
     systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
     generationConfig: {
       temperature: 0.4,
-      maxOutputTokens: 900,
-      thinkingConfig: { thinkingBudget: 0 },
+      maxOutputTokens: 1200,
+      thinkingConfig: { thinkingLevel: THINKING_LEVEL },
     },
   })
 
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  const started = Date.now()
   let data
   let status = 0
+  let timer
   try {
     // The free tier turns busy in short spikes, so one quick retry saves most
-    // of them from ever reaching the student.
+    // of them from ever reaching the student. Each attempt gets its own clock,
+    // and the retry is skipped if there isn't time left for it.
     for (let attempt = 0; attempt < 2; attempt++) {
-      if (attempt) await new Promise((r) => setTimeout(r, 1200))
+      if (attempt) {
+        if (Date.now() - started > TOTAL_MS - ATTEMPT_MS) break
+        await new Promise((r) => setTimeout(r, 1200))
+      }
+      const controller = new AbortController()
+      clearTimeout(timer)
+      timer = setTimeout(() => controller.abort(), ATTEMPT_MS)
       const r = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(MODEL)}:generateContent`,
         {
@@ -171,7 +187,11 @@ export default async function handler(req, res) {
     }
   } catch (e) {
     clearTimeout(timer)
-    if (e.name === 'AbortError') return bad(res, 504, 'The tutor took too long to answer. Try asking again.')
+    if (e.name === 'AbortError') {
+      return bad(res, 504, 'The AI is running slow right now and didn’t answer in time. Ask again in a few seconds.', {
+        code: 'slow',
+      })
+    }
     console.error('gemini request failed', e)
     return bad(res, 502, 'Could not reach the AI service. Try again in a moment.')
   }
