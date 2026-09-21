@@ -152,7 +152,9 @@ export default async function handler(req, res) {
         return bad(res, 429, 'The free AI quota for today is used up. Try again tomorrow.', { code: 'limit' })
       }
       console.error('gemini error', detail)
-      return bad(res, 502, 'The AI service returned an error. Try again in a moment.')
+      // `detail` is the upstream message (never the key). The panel doesn't
+      // show it, but it means a failure can be diagnosed without log access.
+      return bad(res, 502, 'The AI service returned an error. Try again in a moment.', { detail })
     }
   } catch (e) {
     clearTimeout(timer)
