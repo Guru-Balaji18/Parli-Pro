@@ -124,32 +124,45 @@ export default async function handler(req, res) {
   }
   contents.push({ role: 'user', parts: [{ text: question }] })
 
+  const body_ = JSON.stringify({
+    contents,
+    systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+    generationConfig: {
+      temperature: 0.4,
+      maxOutputTokens: 900,
+      thinkingConfig: { thinkingBudget: 0 },
+    },
+  })
+
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
   let data
+  let status = 0
   try {
-    const r = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(MODEL)}:generateContent`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-        signal: controller.signal,
-        body: JSON.stringify({
-          contents,
-          systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-          generationConfig: {
-            temperature: 0.4,
-            maxOutputTokens: 900,
-            thinkingConfig: { thinkingBudget: 0 },
-          },
-        }),
-      },
-    )
-    data = await r.json()
-    if (!r.ok) {
-      const detail = data?.error?.message || `status ${r.status}`
-      if (r.status === 429) {
+    // The free tier turns busy in short spikes, so one quick retry saves most
+    // of them from ever reaching the student.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (attempt) await new Promise((r) => setTimeout(r, 1200))
+      const r = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(MODEL)}:generateContent`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+          signal: controller.signal,
+          body: body_,
+        },
+      )
+      status = r.status
+      data = await r.json()
+      if (r.ok || r.status !== 503) break
+    }
+    if (status < 200 || status >= 300) {
+      const detail = data?.error?.message || `status ${status}`
+      if (status === 429) {
         return bad(res, 429, 'The free AI quota for today is used up. Try again tomorrow.', { code: 'limit' })
+      }
+      if (status === 503) {
+        return bad(res, 503, 'The AI is busy right now. Give it a few seconds and ask again.', { code: 'busy', detail })
       }
       console.error('gemini error', detail)
       // `detail` is the upstream message (never the key). The panel doesn't
