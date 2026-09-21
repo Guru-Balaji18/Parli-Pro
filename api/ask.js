@@ -175,7 +175,18 @@ export default async function handler(req, res) {
     if (status < 200 || status >= 300) {
       const detail = data?.error?.message || `status ${status}`
       if (status === 429) {
-        return bad(res, 429, 'The free AI quota for today is used up. Try again tomorrow.', { code: 'limit' })
+        // Google uses 429 for both its per-minute and its per-day caps, and
+        // only the message says which. Guessing wrong sends people away for a
+        // day over a one-minute limit.
+        const perDay = /per ?day|daily/i.test(detail)
+        return bad(
+          res,
+          429,
+          perDay
+            ? 'The free AI quota for today is used up. It resets tomorrow.'
+            : 'The AI is being asked too fast right now. Wait a minute and try again.',
+          { code: 'limit', detail },
+        )
       }
       if (status === 503) {
         return bad(res, 503, 'The AI is busy right now. Give it a few seconds and ask again.', { code: 'busy', detail })
