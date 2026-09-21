@@ -131,8 +131,8 @@ function App() {
               )}
               {view === 'duel' && <Duel profile={profile} record={record} />}
               {view === 'team' && <Team profile={profile} />}
-              {view === 'vocab' && <Vocab jumpTo={jumpAnchor} />}
-              {view === 'reference' && <Reference jumpTo={jumpAnchor} />}
+              {view === 'vocab' && <Vocab jumpTo={jumpAnchor} profile={profile} />}
+              {view === 'reference' && <Reference jumpTo={jumpAnchor} profile={profile} />}
               {view === 'settings' && <Settings profile={profile} record={record} onLogout={handleLogout} />}
               {view === 'admin' && isAdmin && <Admin profile={profile} />}
             </motion.div>

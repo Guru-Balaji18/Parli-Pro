@@ -6,6 +6,7 @@ import { findLookup } from '../lib/lookup'
 import questions from '../data/questions.json'
 import { layoutOptions, shuffle } from '../lib/quiz'
 import Explanation from './Explanation'
+import QuestionTutor from './QuestionTutor'
 import Icon from './Icons'
 import { bigCelebration, popFrom } from '../lib/celebrate'
 
@@ -355,6 +356,7 @@ export default function Practice({ mode, record, profile, onLookup }) {
                       Correct: <strong>{shownLetter(q, q.answer)}</strong> — {q.options[q.answer]}
                     </div>
                     <Explanation id={q.id} letter={shownLetter(q, q.answer)} answerText={q.options[q.answer]} />
+                    <QuestionTutor question={q} picked={a?.letter} profile={profile} />
                   </>
                 )}
                 <div className="er-src">
@@ -495,6 +497,7 @@ export default function Practice({ mode, record, profile, onLookup }) {
                 {current.ronr_pages ? ` · cited to RONR p. ${current.ronr_pages}` : ''}
               </div>
               <LookupLink question={current} onLookup={onLookup} />
+              <QuestionTutor question={current} picked={answer} profile={profile} />
               <button className="next-btn" onClick={next} autoFocus>Next question →</button>
             </div>
           )}

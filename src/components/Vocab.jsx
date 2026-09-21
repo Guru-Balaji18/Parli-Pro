@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { VOCAB_GROUPS, VOCAB_TERMS } from '../data/vocab'
+import { capContext, vocabContext } from '../lib/askContext'
+import AskAI from './AskAI'
+import Icon from './Icons'
 
 function shuffle(a) {
   const x = a.slice()
@@ -10,10 +13,11 @@ function shuffle(a) {
   return x
 }
 
-export default function Vocab({ jumpTo }) {
+export default function Vocab({ jumpTo, profile }) {
   const [tab, setTab] = useState('browse')
   const [query, setQuery] = useState('')
   const [group, setGroup] = useState('all')
+  const [askDraft, setAskDraft] = useState('')
 
   useEffect(() => {
     if (!jumpTo) return
@@ -40,6 +44,13 @@ export default function Vocab({ jumpTo }) {
     })
   }, [query, group])
 
+  const askContextText = useMemo(() => capContext(vocabContext(filtered, VOCAB_TERMS)), [filtered])
+
+  function askAbout(term) {
+    setAskDraft(`What does “${term.term}” mean, and when would it come up in a meeting?`)
+    setTab('ask')
+  }
+
   return (
     <div>
       <div className="page-head">
@@ -59,9 +70,25 @@ export default function Vocab({ jumpTo }) {
         <button className={tab === 'cards' ? 'on' : ''} onClick={() => setTab('cards')}>
           Flashcards
         </button>
+        <button className={tab === 'ask' ? 'on' : ''} onClick={() => setTab('ask')}>
+          Ask AI
+        </button>
       </div>
 
-      {tab === 'browse' ? (
+      {tab === 'ask' ? (
+        <AskAI
+          profile={profile}
+          context={askContextText}
+          draft={askDraft}
+          onDraft={setAskDraft}
+          placeholder="Ask about a term…"
+          intro="Ask about any term on this page — what it means, how it differs from a similar one, or what it sounds like in a real meeting."
+          suggestions={[
+            'What’s the difference between a session and a meeting?',
+            'Which terms do judges listen for most?',
+          ]}
+        />
+      ) : tab === 'browse' ? (
         <>
           <div className="vocab-controls">
             <input
@@ -84,6 +111,10 @@ export default function Vocab({ jumpTo }) {
                 <dt>{t.term}</dt>
                 <dd>{t.def}</dd>
                 <div className="vocab-group">{t.groupLabel}</div>
+                <button className="vocab-ask" onClick={() => askAbout(t)}>
+                  <Icon name="sparkle" />
+                  Ask AI
+                </button>
               </div>
             ))}
           </dl>

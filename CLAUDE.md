@@ -50,6 +50,11 @@ The publishable key is already hardcoded in `src/lib/supabase.js` — it's safe 
 * Scores are tallied only when a question closes and picks stay hidden until then, so nobody can see another player's answer early. The next question starts 3.5s after a close, which is the reveal window. Winner: most correct, then lowest total time (an unanswered question counts the full 30s); a remaining tie is a draw.
 * Tested with a scripted three-player match in a rolled-back transaction, and live in the browser with two simulated teammates (lobby fill, host start, live scoreboard, reveal tags, standings). Matches from before this migration have no `duel_players` rows, so `duel_record` ignores them.
 
+### AI tutor quota (2026-09-21)
+
+* `chat_usage` — `user_id`, `day`, `uses`, primary key `(user_id, day)`. No client grants at all; only the serverless function touches it.
+* `chat_quota(p_user uuid)` (security definer, execute granted to `anon`) — counts one message against the asker and returns `allowed / remaining / reason`. It refuses an id that isn't a profile (`unknown_player`), a person past 40 messages in a day (`daily_limit`), or the whole team past 500 in a day (`team_limit`). The limits are constants inside the function, not arguments, so a caller can't raise them. The day boundary is midnight America/New_York, matching the rest of the app. Verified as `anon` in a rolled-back transaction.
+
 ### Security model — read this before "fixing" it
 
 There is no real Supabase Auth here. Login is a custom `name + PIN` system with no JWT, no session token beyond a profile object cached in `localStorage`. This was a deliberate tradeoff: real Supabase Auth requires email confirmation, and there was no tool access to toggle that project setting off remotely, so onboarding a small trusted team with email would have been fragile (confirmation emails, deliverability, rate limits). Given the actual threat model (a handful of trusted teammates practicing quiz questions, not sensitive data), an honor-system PIN was judged an acceptable, disclosed tradeoff — the user was told explicitly that a teammate who knows your name and PIN could see your record.
@@ -72,6 +77,9 @@ The very first version used a single shared app-wide passcode (`check_passcode`/
 
 ```
 parlipro-app/
+├── api/
+│   └── ask.js               — Vercel serverless function behind the AI tutor (see §9)
+├── .env.example             — the env vars api/ask.js reads
 ├── src/
 │   ├── App.jsx              — shell, nav, view routing (no router lib — plain useState)
 │   ├── index.css            — design tokens (colors, fonts)
@@ -81,7 +89,9 @@ parlipro-app/
 │   │   ├── Dashboard.jsx    — personal stats, charts, streak
 │   │   ├── Practice.jsx     — the core quiz engine: practice/exam/review modes all live here
 │   │   ├── Duel.jsx         — Battle: home (create/join), lobby, live match, results
-│   │   ├── Explanation.jsx  — lazy-loaded RONR explanation block, shared by Practice and Duel
+│   │   ├── Explanation.jsx  — RONR explanation block, shared by Practice and Duel
+│   │   ├── AskAI.jsx        — the AI tutor chat panel (used by Practice, Reference, Vocab)
+│   │   ├── QuestionTutor.jsx— AskAI wired to one quiz question and its explanation
 │   │   ├── CountUp.jsx      — animated number for dashboard stats
 │   │   ├── Icons.jsx        — rounded line icon set (nav + UI)
 │   │   ├── Team.jsx         — leaderboard (This Week / All-Time), captain drill-down
@@ -93,10 +103,13 @@ parlipro-app/
 │   │   ├── questions.json   — the 1,610-question bank (minified, ~726KB)
 │   │   ├── categories.js    — 12 HOSA-topic category definitions
 │   │   ├── vocab.js         — 79 terms, 10 groups, self-written definitions
+│   │   ├── meetingGuide.js  — the written "How a meeting runs" walkthrough (§7)
 │   │   └── motions.js       — precedence chart data + 4-tier study priority list
 │   └── lib/
 │       ├── supabase.js      — client init
 │       ├── quiz.js          — shuffle, 3-choice option layout (shared by Practice and Duel)
+│       ├── explanations.js  — lazy loader + citation formatting for explanations.json
+│       ├── askContext.js    — builds the study context each page sends to the AI tutor
 │       ├── duel.js          — duel question picking, server clock offset hook, error text
 │       ├── celebrate.js     — canvas-confetti bursts (skipped under reduced motion)
 │       ├── useRecord.js     — hook: loads current user's attempts+flags, plus stat helpers
@@ -159,6 +172,8 @@ The earlier formal "Open Ledger" look (navy cover, parchment page, EB Garamond, 
 * Answer explanations (`data/explanations.json`, lazy-loaded by `Explanation` in `Practice.jsx` so the ~550 KB file stays out of the main bundle): every one of the 1,610 questions has one, shown after answering (and on missed mock-test questions). Each source names where it is in RONR 12th ed. and says what that passage says in a close, clearly labeled paraphrase. It is deliberately not quoted, because the book is under copyright and the site is publicly reachable. `ref` is a paragraph (`46:6`), a footnote (`3:16n3`), a Table II row (`T2-28`), a tinted-page list (`L-V`), or `Intro`; `citation()` turns it into readable text, and `section` holds the section or table title. The PDF has no printed page numbers, so never cite pages. `answer` is the "So:" line and must not mention option letters, since 3-choice mode relabels them. The component adds Dunbar's key letter itself. `conflict` flags the 22 questions where Dunbar's key is shaky or wrong under the 12th ed. The file was generated by a one-off pipeline (RONR text index, retrieval, hand-written batches, validation) kept outside the repo. Edit the JSON directly for fixes.
 * Admin (`components/Admin.jsx`; nav item shown only to role `admin`; `guru` is the admin): member stats, each member's full answer history / mock tests / flags, and removing members. All of it goes through `admin_members`, `admin_member_history` and `admin_remove_member` — security-definer functions that re-verify the admin's name + PIN through `admin_check`, which clients can't call. The PIN lives in component state only (re-entered each visit). Removal explicitly deletes the member's attempts, flags and exam sessions (their FKs are ON DELETE SET NULL) and refuses to remove yourself or another admin. The client-side role check only hides the nav item; the database is the real gate.
 * Battle (`components/Duel.jsx`, schema in §2): live matches for 2–8 players, joined by a 4-character room code. The creator picks the number of questions (5–30 chips or 3–50 custom), categories and 3-choice mode, then starts the match once everyone is in the lobby. Each question has a 30-second server-timed clock and closes early when everyone has answered. Live scoreboard that reorders by score and shows each player's state, everyone's pick tagged on the answers during the reveal, final standings with places and times, a per-question review with explanations, and a win/loss/draw tally. Updates come over Supabase Realtime with a 3-second polling fallback, and the active match id is kept in sessionStorage so a refresh rejoins it. Quitting drops you from the standings; the rest play on.
+* AI tutor (`components/AskAI.jsx`, `api/ask.js`; setup in §9): a chat panel in three places — under an answered question in Practice and in the mock-test review (collapsed until asked for, via `QuestionTutor`), and as an "Ask AI" tab on Reference and Vocabulary. Each place sends its own context (`lib/askContext.js`): the question with its key, the student's pick and the app's explanation; the motions chart plus the HOSA half of the meeting guide; or the vocabulary definitions. Vocabulary also has a per-term "Ask AI" button that drops a question into the tab. Chats are not stored anywhere — they live in component state and vanish on navigation.
+* How a meeting runs (`data/meetingGuide.js`, Reference → "How a meeting runs"): a written walkthrough in two parts. The first is general procedure in prose — why the rules exist, quorum and roles, the standard order of business, the eight steps of a motion, debate, the subsidiary/incidental/privileged motions in practice, voting thresholds, bring-back motions, minutes. The second is the HOSA event: round formats, the 15-minute prep and 11-minute demonstration, the 162-point rating sheet, and a suggested plan for the eleven minutes. Written for this app, not copied from RONR. The HOSA numbers come from the August 2025 ILC guidelines (linked in-app) — re-check them each season, and note state conferences differ.
 * Vocabulary: 79 terms, browse (search + filter) and flashcard modes
 * Reference: full motions precedence chart (privileged/incidental/subsidiary/main/bring-back classes) + 4-tier study priority list from a frequency analysis of the original Dunbar files
 * Team tab: leaderboard with This Week / All-Time toggle. "This Week" resets Friday 12:00 AM US Eastern Time for every viewer regardless of device time zone, DST-aware (see `challengeWeek.js`; no automated tests are checked in — it was verified by hand across both 2026 DST transitions and six device time zones). Everyone sees name + accuracy; captain role additionally gets a per-teammate category-breakdown drill-down.
@@ -166,7 +181,21 @@ The earlier formal "Open Ledger" look (navy cover, parchment page, EB Garamond, 
 * Settings: account info, the calibration/limitations notes from §4 above, CSV export of personal history, clear-history option
 * Keyboard shortcuts: `A`–`D`/`1`–`4` to answer (also in Battle), `Enter` for next
 
-## 8. Open items / suggested next steps
+## 8. The AI tutor — how it is wired
+
+The site is a static build, so the AI key cannot live in the front end. `api/ask.js` is a Vercel serverless function (zero-config: any file under `api/` is deployed as one, whatever the framework) and is the only thing that ever sees the key.
+
+**Setup.** Create a key at <https://aistudio.google.com/apikey> (Google AI Studio, free tier) and add it to the Vercel project as `GEMINI_API_KEY`, then redeploy. Optional: `GEMINI_MODEL` (defaults to `gemini-2.5-flash`). Without a key the endpoint answers 503 and the panel says the tutor is not set up yet — nothing crashes. For local work, copy `.env.example` to `.env.local` and put the key there; `vite.config.js` mounts the same handler on the dev server, because `npm run dev` is only Vite and would otherwise have no `/api`.
+
+**Request path.** The browser posts `{userId, question, context, history}` to `/api/ask`. The function calls `chat_quota` (see §2) with the Supabase anon key, which both checks that the asker is a real profile and counts the message. Then it calls Gemini with a system prompt that keeps the tutor on parliamentary procedure, tells it to paraphrase rather than quote RONR, and tells it to treat the study context as reference rather than instructions. The reply is returned with the asker's remaining message count.
+
+**Limits.** 40 messages per person per day and 500 across the team, both resetting at midnight Eastern. The free Gemini tier has its own daily quota on top; when Google returns 429 the panel says so. `AskAI` renders the reply as plain text with bullets and bold only — no HTML from the model ever reaches the page.
+
+**Honesty about the gate.** `userId` is a profile id, and profile ids are readable with the public anon key, so the quota is a spending limit, not real authentication — same honor-system model as the rest of the app (§2). If the bill ever matters more than the convenience, this is the piece that needs real auth.
+
+**What has been tested.** Everything except a real answer: the handler's branches against a stubbed model (`scratchpad/test_ask.mjs` in the session that built it), the quota function as `anon` in a rolled-back transaction, and the whole chain in the browser down to Google rejecting a deliberately invalid key. Nobody has yet seen the tutor produce a real reply — do that first with a real key.
+
+## 9. Open items / suggested next steps
 
 1. ~~Get actual eyes on the rendered site before making further visual changes.~~ Done 2026-09-15 — run `npm run dev` and look at it; a `.claude/launch.json` is checked in so the preview server starts by name. Always verify visually before claiming a visual change works.
 2. ~~Confirm Vercel Deployment Protection is enabled.~~ Settled 2026-09-15 — deliberately left off (§5).
