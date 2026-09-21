@@ -6,13 +6,13 @@
 //
 // Environment variables (set these in the Vercel project, not in the repo):
 //   GEMINI_API_KEY  — required. From https://aistudio.google.com/apikey
-//   GEMINI_MODEL    — optional, defaults to gemini-2.5-flash
+//   GEMINI_MODEL    — optional, defaults to gemini-3.6-flash
 //   SUPABASE_URL / SUPABASE_ANON_KEY — optional; default to the same public
 //                     project the front end already uses.
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://eqjexfceuwmsujhjvfim.supabase.co'
 const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || 'sb_publishable_yYHoFVdj4pgwjKKt3gjFKQ_IsxkMk4l'
-const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
+const MODEL = process.env.GEMINI_MODEL || 'gemini-3.6-flash'
 
 const MAX_TURNS = 12
 const MAX_CHARS = 1200
