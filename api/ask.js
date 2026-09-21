@@ -202,16 +202,21 @@ export default async function handler(req, res) {
     if (status < 200 || status >= 300) {
       const detail = data?.error?.message || `status ${status}`
       if (status === 429) {
-        // Google uses 429 for both its per-minute and its per-day caps, and
-        // only the message says which. Guessing wrong sends people away for a
-        // day over a one-minute limit.
+        // Google returns 429 for a short burst limit and for a spent daily
+        // allowance, and its message often doesn't say which. Short waits are
+        // already retried above, so anything reaching here is worth being
+        // vague-but-honest about rather than promising a specific reset.
         const perDay = /per ?day|daily/i.test(detail)
+        // Over half a minute of waiting isn't a burst limit any more.
+        const brief = retryDelay(data) > 0 && retryDelay(data) < 30000
         return bad(
           res,
           429,
           perDay
-            ? 'The free AI quota for today is used up. It resets tomorrow.'
-            : 'The AI is being asked too fast right now. Wait a minute and try again.',
+            ? 'The free AI allowance for today is used up. It resets tomorrow.'
+            : brief
+              ? 'The AI is being asked too fast right now. Wait a minute and try again.'
+              : 'The AI has hit its usage limit on this key. Try again later — if this keeps happening, the key needs a paid plan.',
           { code: 'limit', detail },
         )
       }
