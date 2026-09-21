@@ -24,6 +24,17 @@ const MAX_CHARS = 1200
 const MAX_CONTEXT = 12000
 const ATTEMPT_MS = 20000
 const TOTAL_MS = 45000
+const MAX_RETRY_WAIT = 8000
+
+// How long Google asked us to wait, in ms, from either the structured
+// RetryInfo detail or the sentence in the message. 0 when it didn't say.
+function retryDelay(data) {
+  const info = (data?.error?.details || []).find((d) => String(d['@type']).includes('RetryInfo'))
+  const fromDetail = info?.retryDelay && String(info.retryDelay).match(/^([\d.]+)s?$/)
+  if (fromDetail) return Math.ceil(Number(fromDetail[1]) * 1000)
+  const fromText = String(data?.error?.message || '').match(/retry in ([\d.]+)\s*s/i)
+  return fromText ? Math.ceil(Number(fromText[1]) * 1000) : 0
+}
 
 // Vercel would otherwise cut the function off before a slow answer arrives.
 export const maxDuration = 60
@@ -147,14 +158,18 @@ export default async function handler(req, res) {
   let data
   let status = 0
   let timer
+  let wait = 0
   try {
-    // The free tier turns busy in short spikes, so one quick retry saves most
-    // of them from ever reaching the student. Each attempt gets its own clock,
-    // and the retry is skipped if there isn't time left for it.
-    for (let attempt = 0; attempt < 2; attempt++) {
+    // Two things the free tier does constantly: 503 "high demand" spikes, and
+    // 429s for its 20-requests-a-minute cap, which clear in a couple of
+    // seconds and will happen whenever a few teammates study together. Both
+    // are worth riding out here rather than showing the student an error.
+    // Each attempt gets its own clock, and a retry is skipped if the overall
+    // budget can't fit another one.
+    for (let attempt = 0; attempt < 3; attempt++) {
       if (attempt) {
-        if (Date.now() - started > TOTAL_MS - ATTEMPT_MS) break
-        await new Promise((r) => setTimeout(r, 1200))
+        if (Date.now() - started > TOTAL_MS - ATTEMPT_MS - wait) break
+        await new Promise((r) => setTimeout(r, wait))
       }
       const controller = new AbortController()
       clearTimeout(timer)
@@ -170,7 +185,19 @@ export default async function handler(req, res) {
       )
       status = r.status
       data = await r.json()
-      if (r.ok || r.status !== 503) break
+      if (r.ok) break
+      if (r.status === 503) {
+        wait = 1200
+        continue
+      }
+      // Google says how long to wait when it throttles; only short waits are
+      // worth holding the student's request open for.
+      const suggested = retryDelay(data)
+      if (r.status === 429 && suggested > 0 && suggested <= MAX_RETRY_WAIT) {
+        wait = suggested + 300
+        continue
+      }
+      break
     }
     if (status < 200 || status >= 300) {
       const detail = data?.error?.message || `status ${status}`
