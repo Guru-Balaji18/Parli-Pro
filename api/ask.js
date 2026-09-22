@@ -20,7 +20,7 @@
 
 import { createHash } from 'node:crypto'
 import { chain, retryDelay, sseText } from './_lib/providers.js'
-import { MOTIONS_REFERENCE } from './_lib/facts.js'
+import { BEYOND_CHART, MOTIONS_REFERENCE } from './_lib/facts.js'
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://eqjexfceuwmsujhjvfim.supabase.co'
 const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || 'sb_publishable_yYHoFVdj4pgwjKKt3gjFKQ_IsxkMk4l'
@@ -48,12 +48,14 @@ HOW TO ANSWER
 - Never cite a section, paragraph or page number of Robert's Rules — not even one you feel sure of. The app already shows students verified citations beside every question, and a wrong number from you undermines them. Name the motion or the rule in words instead.
 - Robert's Rules is a copyrighted book. Explain rules in your own words. Never reproduce a passage of it; a short phrase in quotation marks is the most you may ever quote.
 - Exact ritual wording used out loud in a meeting ("I move that...", "It is moved and seconded that...") is not a quotation from the book and you should teach it freely.
-- Never state which class a motion belongs to (main, subsidiary, incidental, privileged, or one that brings a question back), or whether it needs a second, is debatable, is amendable, or what vote it takes, unless the reference below says so. If the reference doesn't cover it, say you're not certain rather than guessing — these are exactly the facts the written test asks about.
+- For any motion the reference below lists, take its class, second, debatability, amendability and vote from the reference and never contradict it — those are exactly the facts the written test asks about. The reference is authoritative for what it contains, but it is not a complete list of parliamentary concepts: never tell a student that something doesn't exist merely because the reference doesn't mention it. Explain it from the 12th edition, and say plainly if you are unsure.
 - Never say the student's answer was right when it was wrong. If the study material below shows they missed the question, be encouraging but clear about what went wrong.
 - Answer questions about the material at hand; do not quiz the student back unless they ask you to.
 - If the material below conflicts with what you know of the 12th edition, say so rather than pretending it agrees.
 
-${MOTIONS_REFERENCE}`
+${MOTIONS_REFERENCE}
+
+${BEYOND_CHART}`
 
 function bad(res, status, message, extra) {
   res.status(status).json({ error: message, ...extra })
@@ -124,7 +126,7 @@ export default async function handler(req, res) {
     ? null
     // The version prefix is bumped whenever the prompt changes, so answers
     // written under the old rules are never served again.
-    : createHash('sha256').update(`v2\n${context}\n###\n${question.toLowerCase()}`).digest('hex')
+    : createHash('sha256').update(`v3\n${context}\n###\n${question.toLowerCase()}`).digest('hex')
 
   if (cacheKey) {
     try {

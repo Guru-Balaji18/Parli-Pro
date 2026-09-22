@@ -53,11 +53,7 @@ export default function AskAI({
     setDraft('')
     setBusy(true)
     try {
-      const r = await fetch('/api/ask', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: profile?.id, question, context, history }),
-      })
+      const r = await post({ userId: profile?.id, question, context, history })
 
       // An error, or an answer that came straight from the cache, arrives as
       // ordinary JSON. A fresh answer streams in as a line of JSON per piece.
@@ -65,10 +61,8 @@ export default function AskAI({
       if (!streamed) {
         const data = await r.json().catch(() => null)
         if (!r.ok || !data?.reply) {
-          setMessages((m) => [
-            ...m,
-            { id: nextId.current++, role: 'error', text: data?.error || 'Something went wrong reaching the tutor.' },
-          ])
+          const text = data?.error || `Something went wrong reaching the tutor (${r.status}). Try again in a moment.`
+          setMessages((m) => [...m, { id: nextId.current++, role: 'error', text }])
         } else {
           setMessages((m) => [...m, { id: nextId.current++, role: 'bot', text: data.reply }])
           if (typeof data.remaining === 'number') setRemaining(data.remaining)
@@ -227,6 +221,23 @@ export default function AskAI({
       </div>
     </motion.section>
   )
+}
+
+// A deploy takes the endpoint away for a second or two, and the platform's own
+// error page isn't JSON — that is worth one silent retry rather than an error
+// in front of the student.
+async function post(payload, attempt = 0) {
+  const r = await fetch('/api/ask', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  const ct = r.headers.get('content-type') || ''
+  if (!r.ok && !ct.includes('json') && attempt === 0) {
+    await new Promise((done) => setTimeout(done, 1500))
+    return post(payload, 1)
+  }
+  return r
 }
 
 // The model writes plain text with the occasional bullet list or **bold** run.
