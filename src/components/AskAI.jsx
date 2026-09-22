@@ -28,6 +28,9 @@ export default function AskAI({
   const draft = draftProp === undefined ? ownDraft : draftProp
   const setDraft = onDraft || setOwnDraft
   const [busy, setBusy] = useState(false)
+  // The id of the answer currently streaming in, so the typing dots stop as
+  // soon as real words start arriving.
+  const [liveId, setLiveId] = useState(null)
   const [remaining, setRemaining] = useState(null)
   const threadRef = useRef(null)
   const inputRef = useRef(null)
@@ -55,15 +58,62 @@ export default function AskAI({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: profile?.id, question, context, history }),
       })
-      const data = await r.json().catch(() => null)
-      if (!r.ok || !data?.reply) {
+
+      // An error, or an answer that came straight from the cache, arrives as
+      // ordinary JSON. A fresh answer streams in as a line of JSON per piece.
+      const streamed = (r.headers.get('content-type') || '').includes('ndjson')
+      if (!streamed) {
+        const data = await r.json().catch(() => null)
+        if (!r.ok || !data?.reply) {
+          setMessages((m) => [
+            ...m,
+            { id: nextId.current++, role: 'error', text: data?.error || 'Something went wrong reaching the tutor.' },
+          ])
+        } else {
+          setMessages((m) => [...m, { id: nextId.current++, role: 'bot', text: data.reply }])
+          if (typeof data.remaining === 'number') setRemaining(data.remaining)
+        }
+        return
+      }
+
+      const reader = r.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let id = null
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        let cut
+        while ((cut = buffer.indexOf('\n')) !== -1) {
+          const line = buffer.slice(0, cut).trim()
+          buffer = buffer.slice(cut + 1)
+          if (!line) continue
+          let piece
+          try {
+            piece = JSON.parse(line)
+          } catch {
+            continue
+          }
+          if (piece.t) {
+            if (id === null) {
+              // The bubble appears with the first words, not before them.
+              id = nextId.current++
+              setLiveId(id)
+              setMessages((m) => [...m, { id, role: 'bot', text: piece.t }])
+            } else {
+              const text = piece.t
+              setMessages((m) => m.map((x) => (x.id === id ? { ...x, text: x.text + text } : x)))
+            }
+          }
+          if (piece.done && typeof piece.remaining === 'number') setRemaining(piece.remaining)
+        }
+      }
+      if (id === null) {
         setMessages((m) => [
           ...m,
-          { id: nextId.current++, role: 'error', text: data?.error || 'Something went wrong reaching the tutor.' },
+          { id: nextId.current++, role: 'error', text: 'The tutor came back empty. Try rewording the question.' },
         ])
-      } else {
-        setMessages((m) => [...m, { id: nextId.current++, role: 'bot', text: data.reply }])
-        if (typeof data.remaining === 'number') setRemaining(data.remaining)
       }
     } catch {
       setMessages((m) => [
@@ -72,6 +122,7 @@ export default function AskAI({
       ])
     } finally {
       setBusy(false)
+      setLiveId(null)
       requestAnimationFrame(() => inputRef.current?.focus())
     }
   }
@@ -120,7 +171,7 @@ export default function AskAI({
             </motion.div>
           ))}
         </AnimatePresence>
-        {busy && (
+        {busy && liveId === null && (
           <div className="bubble bot thinking" aria-label="The tutor is typing">
             <span /><span /><span />
           </div>

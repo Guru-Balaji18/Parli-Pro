@@ -53,6 +53,7 @@ The publishable key is already hardcoded in `src/lib/supabase.js` — it's safe 
 ### AI tutor quota (2026-09-21)
 
 * `chat_usage` — `user_id`, `day`, `uses`, primary key `(user_id, day)`. No client grants at all; only the serverless function touches it.
+* `chat_cache` — `key` (sha256 of context + question), `reply`, `model`, `uses`, `created_at`, `last_used`. Read and written through `chat_cache_get` / `chat_cache_put` (security definer, execute granted to `anon`); no table grants. A hit costs no AI quota and no personal allowance.
 * `chat_quota(p_user uuid)` (security definer, execute granted to `anon`) — counts one message against the asker and returns `allowed / remaining / reason`. It refuses an id that isn't a profile (`unknown_player`), a person past 40 messages in a day (`daily_limit`), or the whole team past 500 in a day (`team_limit`). The limits are constants inside the function, not arguments, so a caller can't raise them. The day boundary is midnight America/New_York, matching the rest of the app. Verified as `anon` in a rolled-back transaction.
 
 ### Security model — read this before "fixing" it
@@ -183,19 +184,32 @@ The earlier formal "Open Ledger" look (navy cover, parchment page, EB Garamond, 
 
 ## 8. The AI tutor — how it is wired
 
-The site is a static build, so the AI key cannot live in the front end. `api/ask.js` is a Vercel serverless function (zero-config: any file under `api/` is deployed as one, whatever the framework) and is the only thing that ever sees the key.
+The site is a static build, so an AI key cannot live in the front end. `api/ask.js` is a Vercel serverless function (zero-config: any file under `api/` is deployed as one, whatever the framework, and `api/_lib/` is shared code rather than an endpoint). It is the only thing that ever sees a key.
 
-**Setup.** Create a key at <https://aistudio.google.com/apikey> (Google AI Studio, free tier) and add it to the Vercel project as `GEMINI_API_KEY`, then redeploy. Optional: `GEMINI_MODEL` (defaults to `gemini-3.6-flash`; `gemini-2.5-flash` was tried first and Google refuses it for keys created now). Without a key the endpoint answers 503 and the panel says the tutor is not set up yet — nothing crashes. For local work, copy `.env.example` to `.env.local` and put the key there; `vite.config.js` mounts the same handler on the dev server, because `npm run dev` is only Vite and would otherwise have no `/api`.
+**Setup.** At least one provider key must be set in the Vercel project, or the tutor reports itself as not configured and nothing crashes:
 
-**Request path.** The browser posts `{userId, question, context, history}` to `/api/ask`. The function calls `chat_quota` (see §2) with the Supabase anon key, which both checks that the asker is a real profile and counts the message. Then it calls Gemini with a system prompt that keeps the tutor on parliamentary procedure, tells it to paraphrase rather than quote RONR, and tells it to treat the study context as reference rather than instructions. The reply is returned with the asker's remaining message count.
+* `GROQ_API_KEY` — the main one. Free, no credit card, roughly 1,000 requests a day on `openai/gpt-oss-120b` at 30 a minute. Key from <https://console.groq.com/keys>.
+* `GEMINI_API_KEY` — fallback only. Its free tier turned out to be about **20 requests a day** (measured 2026-09-21: still refusing after five idle minutes, with the suggested wait growing from 3s to 59s), which is why it is no longer the primary.
+* `OPENROUTER_API_KEY` — optional third in line.
+* `GROQ_MODEL` / `GEMINI_MODEL` / `OPENROUTER_MODEL` override model ids. `GROQ_URL` exists only for pointing local dev at a mock.
 
-**Model and latency.** `gemini-3.6-flash`. Two things bit us on the first live run and are easy to repeat: `gemini-2.5-flash` is refused for keys created now, and Gemini 3.x dropped `thinkingBudget` for `thinkingConfig.thinkingLevel` — sending the old field is silently ignored, so the model thinks on every reply and answers slowly enough to hit a timeout. `GEMINI_THINKING_LEVEL` overrides the level; only 3.6 accepts `minimal`, so anything else defaults to `low`. Each attempt gets 20s, the whole request 45s, and the function declares `maxDuration = 60`. The free tier caps `gemini-3.6-flash` at 20 requests (2026-09-21: the cap behaved like a daily one — still 429 after five idle minutes, with the suggested wait growing from 3s to 59s — so treat the free tier as unusable for a whole team and put the key on a paid plan) and it also throws 503 "high demand" spikes. Both are retried in the function (up to 3 attempts, honouring the retry delay Google returns, capped at 8s) instead of surfacing. Only a wait longer than that reaches the student, and then the message distinguishes a per-minute throttle from the daily quota, because Google returns 429 for both.
+Copy `.env.example` to `.env.local` for local work; `vite.config.js` mounts the same handler on the dev server, because `npm run dev` is only Vite and would otherwise have no `/api`.
 
-**Limits.** 40 messages per person per day and 500 across the team, both resetting at midnight Eastern. The free Gemini tier has its own daily quota on top; when Google returns 429 the panel says so. `AskAI` renders the reply as plain text with bullets and bold only — no HTML from the model ever reaches the page.
+**Request path.** The browser posts `{userId, question, context, history}`. The function then, in order: looks for a cached answer, checks `chat_quota` (see §2) with the Supabase anon key, and walks the provider chain until one starts answering. The reply **streams** back as newline-delimited JSON (`{"t":"..."}` per piece, then `{"done":true,"remaining":n}`); `AskAI` appends each piece to a live bubble. Errors and cached answers come back as ordinary JSON instead, which is how the client tells the two apart (`content-type`).
 
-**Honesty about the gate.** `userId` is a profile id, and profile ids are readable with the public anon key, so the quota is a spending limit, not real authentication — same honor-system model as the rest of the app (§2). If the bill ever matters more than the convenience, this is the piece that needs real auth.
+**Falling through.** A provider that is rate-limited, overloaded, erroring or too slow hands over to the next one — but only before any of its bytes have reached the browser, since those can't be taken back. A short throttle (the provider's own suggested retry delay, up to 8s) is waited out on the same provider first. Each attempt gets 20s, the whole request 45s, and the function declares `maxDuration = 60`.
 
-**What has been tested.** Everything except a real answer: the handler's branches against a stubbed model (`scratchpad/test_ask.mjs` in the session that built it), the quota function as `anon` in a rolled-back transaction, and the whole chain in the browser down to Google rejecting a deliberately invalid key. Nobody has yet seen the tutor produce a real reply — do that first with a real key.
+**Caching.** Opening questions only — once a thread has history the answer depends on it. The key is a SHA-256 of the study context plus the lower-cased question, and hits are served from `chat_cache` (§2) in a few milliseconds, cost nothing and **don't count against anyone's daily messages**. Entries go stale after 30 days so prompt and model changes work through. Teammates asking "why is my answer wrong?" on the same quiz question is the case this exists for.
+
+**Limits.** 40 messages per person per day and 500 across the team, both resetting at midnight Eastern, on top of whatever the provider allows.
+
+**Honesty about the gate.** `userId` is a profile id, and profile ids are readable with the public anon key, so the quota is a spending limit, not real authentication — same honor-system model as the rest of the app (§2).
+
+**Two traps that already cost a day.** `gemini-2.5-flash` is refused outright for keys created now ("no longer available to new users"). And Gemini 3.x replaced `thinkingBudget` with `thinkingLevel`: send the old field and it is silently ignored, so the model reasons before every reply and gets slow enough to hit a timeout. Both surfaced only against a real key.
+
+**The prompt forbids citations.** An early live answer cited "§19" for Lay on the Table, which is §17 — the reasoning was right and the number invented. Since `data/explanations.json` already shows students verified citations, the system prompt now bans section, paragraph and page numbers outright rather than trusting the model with them.
+
+**What has been tested.** `scratchpad/test_ask.mjs` (in the session that built this) covers 32 cases against a stubbed provider: cache hit and miss, history bypassing the cache, streaming frames, fall-through to the second provider, short-throttle retries, every error mapping, and input truncation. The streaming and cache paths were also driven through the real UI against a local mock (`scratchpad/mock.mjs` plus `GROQ_URL`), and the Gemini path against the live API.
 
 ## 9. Open items / suggested next steps
 
