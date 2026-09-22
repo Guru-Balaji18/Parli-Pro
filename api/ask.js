@@ -164,6 +164,7 @@ export default async function handler(req, res) {
   let lastError = null
   let streaming = false
   let answered = ''
+  let cut = false
 
   // Each provider gets a turn. A provider that is rate-limited, overloaded or
   // slow hands over to the next one — but only before any of its answer has
@@ -172,7 +173,7 @@ export default async function handler(req, res) {
     if (Date.now() - started > TOTAL_MS - 4000) break
 
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), ATTEMPT_MS)
+    let timer = setTimeout(() => controller.abort(), ATTEMPT_MS)
     try {
       let response = await provider.request({ system: SYSTEM_PROMPT, turns, signal: controller.signal, stream: true })
 
@@ -201,8 +202,13 @@ export default async function handler(req, res) {
 
       for await (const piece of sseText(response, provider.chunk)) {
         if (!streaming) {
-          // First token: commit to this provider and open the stream.
+          // First token: commit to this provider and open the stream. The
+          // short per-attempt clock existed so a slow provider could be
+          // swapped out, which is no longer possible — leaving it running
+          // would chop the answer off mid-sentence.
           streaming = true
+          clearTimeout(timer)
+          timer = setTimeout(() => controller.abort(), Math.max(8000, TOTAL_MS - (Date.now() - started)))
           res.status(200)
           res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8')
           res.setHeader('Cache-Control', 'no-store')
@@ -222,14 +228,18 @@ export default async function handler(req, res) {
         detail: e.name === 'AbortError' ? 'timed out' : String(e.message || e),
       }
       console.error(`tutor: ${provider.name} ${lastError.detail}`)
-      if (streaming) break
+      if (streaming) {
+        cut = true
+        break
+      }
     }
   }
 
   if (streaming) {
-    res.write(`${JSON.stringify({ done: true, remaining: quota.remaining })}\n`)
+    res.write(`${JSON.stringify({ done: true, remaining: quota.remaining, cut: cut || undefined })}\n`)
     res.end()
-    if (cacheKey && answered.trim()) {
+    // A half-written answer must not be served to everyone else for 30 days.
+    if (cacheKey && !cut && answered.trim()) {
       try {
         await rpc('chat_cache_put', { p_key: cacheKey, p_reply: answered.trim(), p_model: lastError ? 'mixed' : 'ai' })
       } catch {

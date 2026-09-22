@@ -106,7 +106,15 @@ export default function AskAI({
               setMessages((m) => m.map((x) => (x.id === id ? { ...x, text: x.text + text } : x)))
             }
           }
-          if (piece.done && typeof piece.remaining === 'number') setRemaining(piece.remaining)
+          if (piece.done) {
+            if (typeof piece.remaining === 'number') setRemaining(piece.remaining)
+            if (piece.cut) {
+              setMessages((m) => [
+                ...m,
+                { id: nextId.current++, role: 'error', text: 'That answer got cut off. Ask again for the rest.' },
+              ])
+            }
+          }
         }
       }
       if (id === null) {
