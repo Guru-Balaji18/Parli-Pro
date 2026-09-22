@@ -53,7 +53,7 @@ export default function AskAI({
     setDraft('')
     setBusy(true)
     try {
-      const r = await post({ userId: profile?.id, question, context, history })
+      const r = await post({ userId: profile?.id, question, context, history, stream: true })
 
       // An error, or an answer that came straight from the cache, arrives as
       // ordinary JSON. A fresh answer streams in as a line of JSON per piece.

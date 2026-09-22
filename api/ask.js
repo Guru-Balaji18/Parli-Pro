@@ -117,6 +117,10 @@ export default async function handler(req, res) {
   const question = clean(body.question, MAX_CHARS)
   if (!question) return bad(res, 400, 'Type a question first.')
 
+  // Only a client that says it can read a stream gets one. A page cached from
+  // before streaming existed doesn't send this, and handing it newline-JSON
+  // breaks every question it asks until someone hard-refreshes.
+  const wantsStream = body.stream === true
   const context = clean(body.context, MAX_CONTEXT)
   const history = Array.isArray(body.history) ? body.history.slice(-MAX_TURNS) : []
 
@@ -219,12 +223,14 @@ export default async function handler(req, res) {
           via = `${provider.name}/${provider.model}`
           clearTimeout(timer)
           timer = setTimeout(() => controller.abort(), Math.max(8000, TOTAL_MS - (Date.now() - started)))
-          res.status(200)
-          res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8')
-          res.setHeader('Cache-Control', 'no-store')
+          if (wantsStream) {
+            res.status(200)
+            res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8')
+            res.setHeader('Cache-Control', 'no-store')
+          }
         }
         answered += piece
-        res.write(`${JSON.stringify({ t: piece })}\n`)
+        if (wantsStream) res.write(`${JSON.stringify({ t: piece })}\n`)
       }
       clearTimeout(timer)
       if (answered.trim()) break
@@ -249,8 +255,12 @@ export default async function handler(req, res) {
     // `via` names the backend that actually answered. Without it a wrong model
     // id looks identical to everything working, because the chain simply falls
     // through to the next provider.
-    res.write(`${JSON.stringify({ done: true, remaining: quota.remaining, via, cut: cut || undefined })}\n`)
-    res.end()
+    if (wantsStream) {
+      res.write(`${JSON.stringify({ done: true, remaining: quota.remaining, via, cut: cut || undefined })}\n`)
+      res.end()
+    } else {
+      res.status(200).json({ reply: answered.trim(), remaining: quota.remaining, via, cut: cut || undefined })
+    }
     // A half-written answer must not be served to everyone else for 30 days.
     if (cacheKey && !cut && answered.trim()) {
       try {
