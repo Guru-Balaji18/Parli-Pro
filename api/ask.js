@@ -165,6 +165,7 @@ export default async function handler(req, res) {
   let streaming = false
   let answered = ''
   let cut = false
+  let via = null
 
   // Each provider gets a turn. A provider that is rate-limited, overloaded or
   // slow hands over to the next one — but only before any of its answer has
@@ -207,6 +208,7 @@ export default async function handler(req, res) {
           // swapped out, which is no longer possible — leaving it running
           // would chop the answer off mid-sentence.
           streaming = true
+          via = `${provider.name}/${provider.model}`
           clearTimeout(timer)
           timer = setTimeout(() => controller.abort(), Math.max(8000, TOTAL_MS - (Date.now() - started)))
           res.status(200)
@@ -236,12 +238,15 @@ export default async function handler(req, res) {
   }
 
   if (streaming) {
-    res.write(`${JSON.stringify({ done: true, remaining: quota.remaining, cut: cut || undefined })}\n`)
+    // `via` names the backend that actually answered. Without it a wrong model
+    // id looks identical to everything working, because the chain simply falls
+    // through to the next provider.
+    res.write(`${JSON.stringify({ done: true, remaining: quota.remaining, via, cut: cut || undefined })}\n`)
     res.end()
     // A half-written answer must not be served to everyone else for 30 days.
     if (cacheKey && !cut && answered.trim()) {
       try {
-        await rpc('chat_cache_put', { p_key: cacheKey, p_reply: answered.trim(), p_model: lastError ? 'mixed' : 'ai' })
+        await rpc('chat_cache_put', { p_key: cacheKey, p_reply: answered.trim(), p_model: via })
       } catch {
         // Failing to cache costs a little money later, not this answer.
       }
