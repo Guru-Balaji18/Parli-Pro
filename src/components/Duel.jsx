@@ -731,7 +731,6 @@ function Results({ duel, profile, players, reveals, toneOf, onExit }) {
   const won = duel.winner_id === profile.id
   const draw = !duel.winner_id
   const champion = table[0]
-  const me = players.find((p) => p.user_id === profile.id)
   const myPlace = table.findIndex((p) => p.user_id === profile.id) + 1
   const celebrated = useRef(false)
 
@@ -824,12 +823,10 @@ function Results({ duel, profile, players, reveals, toneOf, onExit }) {
                   </span>
                 ))}
               </div>
-              {!myOk && me && (
-                <>
-                  <div className="er-correct">Correct: <strong>{shown(q.answer)}</strong> — {q.options[q.answer]}</div>
-                  <Explanation id={q.id} letter={shown(q.answer)} answerText={q.options[q.answer]} />
-                </>
-              )}
+              {/* Shown for every question, not only the missed ones — a
+                  question you guessed right is still worth reading up on. */}
+              <div className="er-correct">Correct: <strong>{shown(q.answer)}</strong> — {q.options[q.answer]}</div>
+              <Explanation id={q.id} letter={shown(q.answer)} answerText={q.options[q.answer]} />
             </motion.li>
           )
         })}
