@@ -807,6 +807,7 @@ function Results({ duel, profile, players, reveals, toneOf, onExit }) {
           const shown = (orig) => layout.find((o) => o.orig === orig)?.shown ?? orig
           const myRow = rows.find((r) => r.user_id === profile.id)
           const myOk = myRow?.is_correct
+          const noAnswer = rows.filter((r) => !r.selected)
           return (
             <motion.li
               key={qid}
@@ -816,16 +817,39 @@ function Results({ duel, profile, players, reveals, toneOf, onExit }) {
               transition={{ delay: Math.min(i * 0.04, 0.6) }}
             >
               <div className="er-q">{q.question}</div>
-              <div className="duel-review-picks">
-                {rows.map((r) => (
-                  <span key={r.user_id} className={`pick-result ${r.is_correct ? 'good' : 'bad'}`}>
-                    {r.user_id === profile.id ? 'You' : r.display_name}: {r.selected ? shown(r.selected) : '—'}
-                  </span>
-                ))}
+              {/* The whole question, replayed: every choice as it was on
+                  screen, who picked what, and then the explanation — for
+                  every question, not only the missed ones, because a lucky
+                  guess is still worth reading up on. */}
+              <div className="q-options review-options">
+                {layout.map(({ shown: letter, orig, text }) => {
+                  const pickers = rows.filter((r) => r.selected === orig)
+                  let cls = 'q-option'
+                  if (orig === q.answer) cls += ' correct'
+                  else if (orig === myRow?.selected) cls += ' incorrect'
+                  else cls += ' dim'
+                  return (
+                    <div key={orig} className={cls}>
+                      <span className="q-letter">{letter}</span>
+                      <span className="q-option-text">{text}</span>
+                      {pickers.length > 0 && (
+                        <span className="pick-tags">
+                          {pickers.map((r) => (
+                            <span key={r.user_id} className={`pick-tag tone-${toneOf(r.user_id)}`}>
+                              {r.user_id === profile.id ? 'You' : r.display_name}
+                            </span>
+                          ))}
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
-              {/* Shown for every question, not only the missed ones — a
-                  question you guessed right is still worth reading up on. */}
-              <div className="er-correct">Correct: <strong>{shown(q.answer)}</strong> — {q.options[q.answer]}</div>
+              {noAnswer.length > 0 && (
+                <div className="review-noanswer">
+                  Out of time: {noAnswer.map((r) => (r.user_id === profile.id ? 'you' : r.display_name)).join(', ')}
+                </div>
+              )}
               <Explanation id={q.id} letter={shown(q.answer)} answerText={q.options[q.answer]} />
             </motion.li>
           )

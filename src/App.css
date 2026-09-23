@@ -3758,3 +3758,73 @@
     font-size: 13.5px;
   }
 }
+
+/* ============================================================
+   Battle results — the question replayed
+   ============================================================ */
+
+/* These reuse the live question card's option styling, but they are plain
+   divs: nothing is clickable, and a div is never :disabled, so the hover
+   state has to be undone by hand. */
+.review-options {
+  margin: 10px 0 12px;
+  gap: 8px;
+}
+
+.review-options .q-option {
+  cursor: default;
+  padding: 10px 14px;
+  font-size: 15px;
+  box-shadow: 0 3px 0 var(--line-2);
+  animation: none;
+}
+
+.review-options .q-option:hover {
+  transform: none;
+  border-color: var(--line-2);
+  background: var(--surface);
+  box-shadow: 0 3px 0 var(--line-2);
+}
+
+.review-options .q-option:hover .q-letter {
+  background: var(--blue-tint);
+  color: var(--blue-ledge);
+}
+
+.review-options .q-option.correct,
+.review-options .q-option.correct:hover {
+  border-color: var(--green);
+  background: var(--green-tint);
+  box-shadow: 0 3px 0 var(--green-ledge);
+}
+
+.review-options .q-option.correct:hover .q-letter {
+  background: var(--green);
+  color: #fff;
+}
+
+.review-options .q-option.incorrect,
+.review-options .q-option.incorrect:hover {
+  border-color: var(--red);
+  background: var(--red-tint);
+  box-shadow: 0 3px 0 var(--red-ledge);
+}
+
+.review-options .q-option.incorrect:hover .q-letter {
+  background: var(--red);
+  color: #fff;
+}
+
+.review-options .q-letter {
+  width: 27px;
+  height: 27px;
+  font-size: 14px;
+  border-radius: 9px;
+}
+
+.review-noanswer {
+  margin: -4px 0 12px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink-3);
+}
